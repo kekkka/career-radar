@@ -4,6 +4,9 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/radar-live-audit.yml'
+      - '.github/workflows/career-monitor.yml'
+      - 'radar_rss.py'
+      - 'radar_quality.py'
   workflow_dispatch:
 permissions:
   contents: read
