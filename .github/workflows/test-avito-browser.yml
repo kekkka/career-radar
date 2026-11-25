@@ -1,0 +1,102 @@
+
+name: Test Avito Browser
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Install browser
+        run: |
+          python3 -m pip install playwright
+          python3 -m playwright install --with-deps chromium
+
+      - name: Read full vacancy
+        run: |
+          python3 - <<'PY'
+          import re
+          import urllib.robotparser
+          from playwright.sync_api import sync_playwright
+
+          BASE = "https://career.avito.com"
+          AGENT = "CareerRadar"
+
+          URL = (
+              BASE + "/publications/upravlenie-produktom/"
+              "8fc055be-22d5-4ea4-be82-ada9f7420b01/"
+          )
+
+          robots = urllib.robotparser.RobotFileParser()
+          robots.set_url(BASE + "/robots.txt")
+          robots.read()
+
+          if not robots.can_fetch(AGENT, URL):
+              raise SystemExit("Access restricted by robots.txt")
+
+          with sync_playwright() as p:
+              browser = p.chromium.launch(headless=True)
+
+              page = browser.new_page(
+                  locale="ru-RU",
+                  user_agent=AGENT
+              )
+
+              response = page.goto(
+                  URL,
+                  wait_until="domcontentloaded",
+                  timeout=60000
+              )
+
+              print("HTTP STATUS:", response.status)
+
+              if response.status >= 400:
+                  raise SystemExit("Page unavailable")
+
+              page.wait_for_timeout(10000)
+
+              page.locator("body").evaluate(
+                  "(element) => element.scrollIntoView()"
+              )
+
+              page.evaluate(
+                  "window.scrollTo(0, document.body.scrollHeight)"
+              )
+
+              page.wait_for_timeout(3000)
+
+              print("PAGE TITLE:", page.title())
+
+              print("HEADINGS:")
+              for heading in page.locator(
+                  "h1, h2, h3, h4"
+              ).all_inner_texts():
+                  print(heading)
+
+              text = page.locator("body").inner_text()
+
+              print("FULL DESCRIPTION:")
+              print(text[:30000])
+
+              matches = re.findall(
+                  r".{0,100}(?:опыт|experience|стаж).{0,180}",
+                  text,
+                  flags=re.IGNORECASE
+              )
+
+              print("EXPERIENCE MENTIONS:")
+              for match in matches:
+                  print(match)
+
+              print("TEXT LENGTH:", len(text))
+
+              browser.close()
+
+          print("BROWSER TEST COMPLETED")
+          PY
