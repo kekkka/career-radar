@@ -1,5 +1,727 @@
-
 {
-  "checked": {},
-  "sent": []
+  "checked": {
+    "14d1fa58-f295-407b-a07e-57e80e89ac45": {
+      "title": "Аналитик данных в команду модерации",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616192
+    },
+    "33dbd6ce-f8ba-4faf-9f48-88fb5088e80f": {
+      "title": "Аналитик данных с фокусом на AI в команду Trisigma",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616196
+    },
+    "38d97739-42fa-4ed8-b4bc-11dd1d8499e7": {
+      "title": "Старший аналитик данных в команду Private Users",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616200
+    },
+    "82afa8b5-46f7-439a-80d2-22d398750969": {
+      "title": "Старший аналитик данных в команду ценообразования Авито Доставки",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616204
+    },
+    "9e953a31-a90e-44ee-a3fa-5a72ae6f21f6": {
+      "title": "Аналитик данных в команду Market Intelligence",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616208
+    },
+    "a3eb49af-6023-425f-a466-390de2791c9c": {
+      "title": "Аналитик данных в команду программы лояльности",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616212
+    },
+    "a75f4ef2-a226-4435-8da2-0e9f02a1fb6c": {
+      "title": "Аналитик данных в команду Ценообразования",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616216
+    },
+    "a8d5b0d8-e66a-41d4-8ca9-324003cdc34b": {
+      "title": "Аналитик данных в команду Спецтехники",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616220
+    },
+    "aefe4d45-15fb-4bee-a3b9-2f29a686e174": {
+      "title": "BI-разработчик в команду Авито Работы",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616224
+    },
+    "af7be384-7e2c-44eb-8297-7b7b9dc2bee0": {
+      "title": "Старший аналитик данных в команду Авито Подработки",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616228
+    },
+    "bb59e68e-8662-42f9-9f6c-be8c979080ab": {
+      "title": "Аналитик данных в команду маркетинга",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616232
+    },
+    "c69006aa-a8b8-48e3-9cca-d840ff6c92ae": {
+      "title": "Старший аналитик данных в команду Ad Intelligence",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616236
+    },
+    "c98784f5-5185-4c80-8b13-9314740f41c7": {
+      "title": "Аналитик данных в команду технической платформы",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616240
+    },
+    "cf05da3a-8e00-414b-bad4-3f19a9824ddd": {
+      "title": "Старший аналитик данных в команду Sales Solutions",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616244
+    },
+    "f65a133e-342c-435c-9d1a-e52a21a38adf": {
+      "title": "Аналитик данных в команду Авито Подработки",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616248
+    },
+    "fd62d28f-c515-493a-8fc1-9446c8a5b28e": {
+      "title": "Аналитик данных в команду ценообразования Авито Доставки",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616252
+    },
+    "0d215c1b-7dc9-4e2f-9710-e2e305ee5858": {
+      "title": "Data Scientist в команду новостроек",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616256
+    },
+    "2f39b75a-e4bd-4e63-a588-e18e9ee02bc7": {
+      "title": "Data Scientist в команду Monetization Efficiency",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616260
+    },
+    "82f502b0-bf6d-4725-8238-5cdf2c652d27": {
+      "title": "Data Scientist в команду IMV",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616264
+    },
+    "8775262d-9fd5-4642-a56f-4a6c1da96a46": {
+      "title": "Старший Data Scientist в команду поискового ранжирования",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616268
+    },
+    "9cf64a5d-1ed8-43ea-8909-faaeec35038a": {
+      "title": "Старший Data Scientist в команду Support Automation",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616272
+    },
+    "b2033c8a-a5f2-4e34-a74f-2bb629666b2c": {
+      "title": "Data Scientist в команду автомодерации",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616276
+    },
+    "e0f6088f-c2b1-42a8-8f52-5096b6e5044b": {
+      "title": "Data Scientist в команду репутационной системы",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616280
+    },
+    "e24001ef-066b-40ac-b36b-df1d38c87522": {
+      "title": "Старший DS-инженер в команду Auction Efficiency",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616285
+    },
+    "e70b7cc7-5fdb-419c-8a4e-d5efd507bbb5": {
+      "title": "Руководитель DS-команды новостроек",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616288
+    },
+    "e87381b3-7deb-40c5-8520-0e1b96c45f2e": {
+      "title": "Тимлид DS-команды IMV",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616292
+    },
+    "60199467-a1dd-4031-b526-adb8d3d4add3": {
+      "title": "Ведущий менеджер по закупкам IT",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616297
+    },
+    "a7686098-83a4-4d8c-8030-f24c4bbacc66": {
+      "title": "Финансовый аналитик направления «Новые автомобили и спецтехника»",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616301
+    },
+    "c9b3255a-f3a0-4edc-9277-fbe09e89d854": {
+      "title": "Финансовый аналитик направления «Автомобили с пробегом»",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616306
+    },
+    "d8020ab5-ba16-4bb8-a20d-438d71a88bf7": {
+      "title": "Финансовый аналитик направления «IT-расходы»",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616310
+    },
+    "f678de36-d181-4566-b84e-8c1d8d2ffa39": {
+      "title": "Старший аналитик в команду развития бизнеса вертикали Авито Товары",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616314
+    },
+    "4319971b-d739-4b53-a42d-ad5eaaffd9ec": {
+      "title": "Координатор команды Talent Acquisition",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616318
+    },
+    "59ce544c-a169-4bfd-b438-ab63e1fb43df": {
+      "title": "Менеджер HR-проектов",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616322
+    },
+    "75e718bd-a237-40aa-80b8-c75d273bb7ca": {
+      "title": "Руководитель сопровождения стажёров и студентов в команде Graduate Recruitment & Education",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616326
+    },
+    "86061004-4114-4f48-8e79-627dacbf5115": {
+      "title": "Старший менеджер образовательных проектов команды Tech",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616331
+    },
+    "b9dae51d-8271-41b7-861c-953a6fa37e57": {
+      "title": "Менеджер образовательных проектов",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616335
+    },
+    "c419684b-88ae-4894-81b8-3a98f8d341cd": {
+      "title": "Старший менеджер по развитию бренд-коммуникаций",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616339
+    },
+    "e7e2bed2-2bbd-4781-96e5-e4f12a05a30c": {
+      "title": "T&D партнёр клиентского сервиса",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616343
+    },
+    "b53b2001-1d70-471c-a6b5-a7f02761812d": {
+      "title": "Руководитель команды SOC",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616347
+    },
+    "e879a40e-482a-4d73-b8aa-6eeffd6698bc": {
+      "title": "Эксперт контроля качества и контента ручной модерации",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616351
+    },
+    "111a9ec3-95c8-4474-939a-9f0cf14f9868": {
+      "title": "Старший менеджер по продуктовому маркетингу",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616355
+    },
+    "17624801-fd71-4fcc-8290-ab6de4dd2394": {
+      "title": "Руководитель группы привлечения платных пользователей",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616359
+    },
+    "217a8899-16a7-4968-a35b-f6e3aa445f34": {
+      "title": "Руководитель маркетинга продукта по росту частотности и вовлечения",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616363
+    },
+    "2e895002-55c8-47d7-bf7d-ad924b87cf40": {
+      "title": "Ведущий менеджер по продуктовому маркетингу",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616367
+    },
+    "34893a07-78a8-4b9b-ab2b-3401ebbb3c9f": {
+      "title": "Специалист по CRM-маркетингу",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616371
+    },
+    "4029542c-08fa-462d-a040-ebd9bebd3fea": {
+      "title": "Старший менеджер по привлечению пользователей",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616375
+    },
+    "47c88a07-2b5a-41c5-aa1f-0ecda68dafc6": {
+      "title": "Руководитель кросс-категорийного маркетинга",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616379
+    },
+    "5fff1295-e91e-49e0-9731-9b6960af051b": {
+      "title": "Специалист по CRM-маркетингу",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616383
+    },
+    "702e032d-92a0-4340-9046-fe66a8135730": {
+      "title": "Старший менеджер по спецпроектам в Товары",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616387
+    },
+    "7750669e-ccd4-475c-b8d0-683795ff6d0f": {
+      "title": "Менеджер по маркетингу продукта",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616391
+    },
+    "8b995366-5cae-4a06-a322-51246805f495": {
+      "title": "Руководитель по маркетингу продукта Авито Доставка",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616395
+    },
+    "91136b77-d9be-4939-a0fe-473be176f45f": {
+      "title": "Руководитель маркетинга",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616399
+    },
+    "a5152827-7b60-4d6f-8e19-32154b84ca43": {
+      "title": "Ведущий менеджер по продуктовому маркетингу",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616403
+    },
+    "afb6d659-7aaf-4108-ac36-40b1d1f63490": {
+      "title": "Старший менеджер по продуктовому маркетингу",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616407
+    },
+    "d32acbbb-7ebe-455a-bc03-06ba8ee11fb1": {
+      "title": "Интернет-маркетолог по развитию сайта и маркетинговой аналитике",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616411
+    },
+    "ddd15030-8fa2-413c-bd92-b1559a51a92f": {
+      "title": "Руководитель по маркетинговым коммуникациям и бренду Авито Товаров",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616415
+    },
+    "eaa03b08-bdc3-47b4-aff6-0393031c8bc0": {
+      "title": "Контент-менеджер Авито Рекламы",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616419
+    },
+    "444c464e-d937-4319-bb05-09ff3b714391": {
+      "title": "Ведущий PR-менеджер",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616423
+    },
+    "e7ba905b-a8e1-457c-adc6-8852de722e31": {
+      "title": "PR-специалист",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616427
+    },
+    "05c6da03-51bd-4c61-9785-f6be61cf1bed": {
+      "title": "Менеджер по работе с партнерами в агентский канал продаж",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616431
+    },
+    "0647bdda-4b69-465b-b850-990c7f533f6d": {
+      "title": "Руководитель группы по сопровождению \"Партнерский канал\"",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616435
+    },
+    "07480b0c-c519-4375-8dc8-76635e669fa1": {
+      "title": "Менеджер по работе с ключевыми клиентами категории «Транспортные услуги»",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616439
+    },
+    "076c223e-3ee4-49d8-b5f8-8bef7cea273a": {
+      "title": "Менеджер по работе с ключевыми клиентами",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616443
+    },
+    "0cb70592-911c-4c4f-8f7b-4fd551a2adc8": {
+      "title": "Менеджер по работе с ключевыми клиентами",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616447
+    },
+    "0e4cf56d-108a-4070-b751-28e2ae11d11f": {
+      "title": "Менеджер по развитию бизнеса",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616451
+    },
+    "137fb207-6baa-4e80-b07b-0b7d90cb25ea": {
+      "title": "Младший менеджер по развитию бизнес-процессов",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616455
+    },
+    "166125da-91f3-4e37-a041-d2ca923138b1": {
+      "title": "Менеджер по работе с ключевыми клиентами категории «Хозяйственные, деловые и прочие услуги»",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616459
+    },
+    "3e927d31-9e75-4bcd-b3fc-c3b5fda1da5e": {
+      "title": "Специалист по привлечению клиентов",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616463
+    },
+    "45c701f2-58d5-416d-962d-2885c6111c52": {
+      "title": "Старший специалист по привлечению клиентов в регионах",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616467
+    },
+    "69f0d1c6-bdcc-411f-a4b2-3e58be437712": {
+      "title": "Менеджер по развитию бизнеса в команду продаж",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616471
+    },
+    "6ea8b06e-cd8a-4f33-b049-2c8817f486ea": {
+      "title": "Менеджер по привлечению собственников",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616475
+    },
+    "7d72d7d9-284c-4c16-b66d-891e851f534c": {
+      "title": "Старший менеджер по работе с рекламными агентствами",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616479
+    },
+    "93c4e577-c591-4f2a-9412-45bfcd196e1a": {
+      "title": "Тендерный специалист",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616483
+    },
+    "ae1d3ac9-cc2c-4535-bd0c-a52b2d8775b4": {
+      "title": "Специалист колл-центра",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616487
+    },
+    "c149ee4d-5b6b-4c1f-9297-e97212f68156": {
+      "title": "Старший специалист по сопровождению коммерческих инициатив",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616491
+    },
+    "cc041140-c2f9-4be4-abde-1a7093bddf8b": {
+      "title": "Индустриальный менеджер по развитию бизнеса",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616495
+    },
+    "d159251a-2588-4d90-b314-4635fee4e0c8": {
+      "title": "Специалист по продажам",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616499
+    },
+    "daadf4a7-5e44-4d6c-abe4-e420c40675b5": {
+      "title": "Специалист по привлечению клиентов в регионах",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616503
+    },
+    "e2a6097d-dd4b-4503-9079-9e3e71c3cb0f": {
+      "title": "Менеджер по работе с ключевыми клиентами",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616507
+    },
+    "ea50628e-b6d8-4b1c-a547-a818a43ea369": {
+      "title": "Менеджер по работе с ключевыми клиентами в команду cпецтехники",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616511
+    },
+    "ea8b24cc-8b32-43f9-bb03-bee0ed57c4dc": {
+      "title": "Руководитель группы по работе с рекламными агентствами",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616514
+    },
+    "0fabde61-e649-475c-b8af-02df0e10a832": {
+      "title": "Старший бэкенд-инженер в команду NetDev",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616518
+    },
+    "23836ae8-0d65-44e7-9d86-f68b923a7000": {
+      "title": "Тимлид команд Data Pipelines Execution/Data Quality",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616522
+    },
+    "32ce877b-734e-430f-ba65-7efbfa5a592e": {
+      "title": "Старший Android-разработчик в команду BDUI",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616526
+    },
+    "3f79faca-f115-42c5-922f-ca991dbc090d": {
+      "title": "Руководитель разработки юнита LLM Tech",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616530
+    },
+    "44344c2c-a200-4756-9d47-04a76ba74523": {
+      "title": "Старший инженер по серверным платформам",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616534
+    },
+    "44eb580b-b33e-4b9a-a476-07e02a94c2ec": {
+      "title": "Старший сетевой инженер",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616539
+    },
+    "4f3a22f0-3331-4791-8982-341468145956": {
+      "title": "Старший бэкенд-разработчик в команду Support Systems",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616543
+    },
+    "6186e9bd-26ef-4a6f-8fde-61e6788fe0e8": {
+      "title": "Старший SRE-инженер в команду Analytics Infrastructure",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616548
+    },
+    "68ad8185-4c0a-4c1d-ace5-88558e7e6392": {
+      "title": "Старший бэкенд-разработчик в команду LLM Gateway",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616552
+    },
+    "6b06141a-7bd4-43d5-9cb7-4740830be335": {
+      "title": "Старший iOS-разработчик в команду BDUI",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616556
+    },
+    "7348a4db-0f46-4d52-8f74-663cc28a6952": {
+      "title": "Старший бэкенд-разработчик в команду LLM Gateway",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616560
+    },
+    "797fa8de-d03e-42ef-88e6-813ec0176f0f": {
+      "title": "Старший Python/Go разработчик в команду TigerTeam",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616564
+    },
+    "a4e65d60-bd66-45aa-bf9c-20935525ade9": {
+      "title": "Старший Data Engineer в команду Analytics Infrastructure",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616568
+    },
+    "c514ebce-caaa-4916-afbe-16aca7e04ab3": {
+      "title": "Старший бэкенд-разработчик в команду Product Security",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616572
+    },
+    "d0c8e699-9091-4e96-b0a8-c2ea777fd6cf": {
+      "title": "Big Data инженер в команду Lakehouse",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616577
+    },
+    "e12a3e77-40a5-4bbe-9af2-a960a57af51c": {
+      "title": "Старший SRE-инженер в команду dev WorkSpace",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616581
+    },
+    "e2c771a4-186b-4b54-b9cd-ba7e374596ba": {
+      "title": "Старший бэкенд-инженер в платформенную команду поддержки",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616585
+    },
+    "e4caaf54-a71c-4aae-9631-be27c56f3085": {
+      "title": "Тимлид разработки в команду Incident/Problem Management",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616590
+    },
+    "e73f87b7-5e51-4338-b94d-5d6037c55a93": {
+      "title": "Тимлид разработки в команду автоматизации поддержки",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616594
+    },
+    "ea3ac208-52d6-4871-94dd-7a4c5158268e": {
+      "title": "Старший разработчик в команду LLM Inference Optimization",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616598
+    },
+    "f12bc2a1-9632-469e-90a6-84a25203a46d": {
+      "title": "Старший бэкенд-разработчик в команду «Анонимайзер»",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616602
+    },
+    "f4925ed7-c5bc-4165-99a1-15d5a26f1f2c": {
+      "title": "Разработчик DBaaS в команду SQL",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616606
+    },
+    "643783ec-da23-4997-9440-6e3b763edf54": {
+      "title": "Руководитель направления исполнения заказов",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616610
+    },
+    "9449f9c5-e37d-467d-b786-8be47d876c6e": {
+      "title": "Старший менеджер по стратегии",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616614
+    },
+    "2ed07aa0-f11f-408a-a7f6-ef340aabfbbc": {
+      "title": "Сервис-менеджер по лицензированию",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616618
+    },
+    "07b8ef61-ab39-4076-818a-6b74f7341175": {
+      "title": "Ведущий продакт-менеджер в команду Авито Услуг",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616622
+    },
+    "56ce109c-b840-476c-bfe4-0345c5c89b31": {
+      "title": "Ведущий менеджер по управлению проектами в Product Management Office",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616626
+    },
+    "8fc055be-22d5-4ea4-be82-ada9f7420b01": {
+      "title": "Ведущий продакт-менеджер DS-продукта в команду Support Automation",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616630
+    },
+    "ba4e174c-b518-4a89-87ab-edbb9689545c": {
+      "title": "Ведущий технический продакт-менеджер в команду LLM",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616634
+    },
+    "ba880b7b-339a-43fa-b4b1-1fbc9f93d9f3": {
+      "title": "Руководитель продуктового юнита Исполнителей в Авито Подработке",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616638
+    },
+    "c4074c3f-23d1-4776-b571-b6de1d4f99e7": {
+      "title": "Руководитель направления продуктов для роста частотности и вовлечения",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616642
+    },
+    "cd71371b-cae4-4457-aaac-adac520c2737": {
+      "title": "Руководитель продуктового юнита CRM",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616646
+    },
+    "de170501-a6c4-4a0d-a420-89d22f336dd4": {
+      "title": "Продакт-менеджер команды Авито Соседи",
+      "role": "Product Management",
+      "internal": true,
+      "timestamp": 1795616650
+    },
+    "e8c5f284-42ac-41a4-a909-9f79c0a3d84b": {
+      "title": "Ведущий продакт-менеджер в команду Support Systems",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616657
+    },
+    "f18ef943-b2a3-46ef-bf40-c3297662c60b": {
+      "title": "Ведущий продакт-менеджер AI/ML-продукта Business Insights",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616661
+    },
+    "fc773b47-26c9-4610-95a6-015fb07c7b55": {
+      "title": "Руководитель продуктового направления юнита рекламного кабинета Авито Рекламы",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616665
+    },
+    "fb925b18-3bde-49b9-b75f-e4e64c1f784f": {
+      "title": "Старший UX-исследователь в команду опыта покупателя",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616668
+    },
+    "db8662ba-a349-4591-bb2b-72b550e91a6f": {
+      "title": "UX-редактор клиентского сервиса",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616672
+    },
+    "cea93f5e-0317-4b5d-839a-cdb90e337cdc": {
+      "title": "Юрист по продукту",
+      "role": null,
+      "internal": true,
+      "timestamp": 1795616676
+    }
+  },
+  "sent": [
+    "de170501-a6c4-4a0d-a420-89d22f336dd4"
+  ]
 }
