@@ -20,12 +20,15 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      - name: Check career sources V0.9
+      - name: Offline quality tests
+        run: python3 -m unittest discover -s tests -v
+      - name: Check career sources V1.0
         env:
           PYTHONUNBUFFERED: "1"
           SEND_NOTIFICATIONS: ${{ github.event_name == 'schedule' || inputs.send_notifications }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          AUTHORIZED_VACANCY_CHANNELS: ${{ vars.AUTHORIZED_VACANCY_CHANNELS }}
         run: |
           python3 -u - <<'PY'
           import urllib.request
@@ -168,11 +171,27 @@ jobs:
 
 
           # Alternative public sources (availability still to be tested)
-          COMPANIES["Самокат"]["career"].append("https://samokat.tech/vacancies")
+          COMPANIES["Самокат"]["career"].append("https://ecom.tech/vacancies")
+          COMPANIES["Самокат"]["career"].append("https://ecom.tech/internships")
+          COMPANIES["Dodo Brands"]["career"].append("https://dodoengineering.ru/")
           COMPANIES["Циан"]["career"].append("https://cian.huntflow.io/")
           COMPANIES["Точка"]["career"].append("https://hr.tochka.com/vacancies/")
           COMPANIES["Т-Банк"]["career"].append("https://www.tbank.ru/career/it/product-analytics/")
 
+          # Public source registry: discovery is not proof of permission or coverage.
+          # No LinkedIn scraping; use official email alerts or explicitly submitted vacancies.
+          CHANNELS = {
+              'avito_career': 'Авито',
+              'ya_jobs_pm': 'Яндекс',
+              'dododev': 'Dodo Brands',
+              'forproducts': '',
+              'it_vakansii_jobs': '',
+              'rostelecom_career': 'Wink',
+          }
+          # Bot API receives posts only from channels where administrators authorized the bot.
+          # An explicit operator allowlist is additionally required; default is disabled.
+          AUTHORIZED_CHANNELS = set(x.strip().lower().lstrip('@') for x in
+                                    os.getenv('AUTHORIZED_VACANCY_CHANNELS', '').split(',') if x.strip())
           SOURCE_TYPES = [
               "career",
               "internal",
@@ -264,6 +283,8 @@ jobs:
                       path
                   ))
 
+              if host == "cian.huntflow.io":
+                  return bool(re.fullmatch(r"/vacancy/[^/]+", path))
               if host == "hr.tochka.com":
                   return bool(re.fullmatch(r"/vacancies/catalog/[^/]+", path))
               if host in ("tbank.ru", "www.tbank.ru"):
@@ -330,10 +351,14 @@ jobs:
                   return None
           opener = urllib.request.build_opener(NoRedirect())
 
+          from radar_quality import retry_fetch, identity_keys, source_status, daily_message
+          retry_stats={'retries':0}
           def raw(url):
-              req = urllib.request.Request(url, headers={"User-Agent": AGENT})
-              with opener.open(req, timeout=20) as response:
-                  return response.read(8*1024*1024).decode("utf-8", errors="replace")
+              def request():
+                  req=urllib.request.Request(url,headers={"User-Agent":AGENT})
+                  with opener.open(req,timeout=20) as response:
+                      return response.read(8*1024*1024).decode("utf-8",errors="replace")
+              return retry_fetch(request,retry_stats)
 
           def allowed(url):
               p = urlparse(url)
@@ -457,6 +482,7 @@ jobs:
           send_enabled = os.getenv('SEND_NOTIFICATIONS', '').lower() == 'true'
           history = json.loads(history_path.read_text()) if history_path.exists() else {'sent': []}
           sent = set(history['sent'])
+          duplicates = 0
           notifications = 0
           send_errors = 0
           def format_notification(company, role, title, state, evidence, ranking, source='career'):
@@ -493,17 +519,23 @@ jobs:
               history_path.write_text(json.dumps(history,indent=2)+'\n')
 
           def notify(company, role, title, link, state, evidence, ranking, source='career'):
-              global notifications, send_errors
+              global notifications, send_errors, duplicates
               private = source != 'career'
               if state != 'POSSIBLE_MATCH':
                   print('HELD FOR EXPERIENCE REVIEW:',state, '' if private else link)
                   return True
               key=hashlib.sha256(canonical(link).encode()).hexdigest() if not private else hashlib.sha256(('submitted:'+company+':'+link+':'+title).encode()).hexdigest()
-              if key in sent: return True
+              keys=identity_keys(company,link)
+              avito_path=Path('data/avito_history.json')
+              avito_sent=set(json.loads(avito_path.read_text()).get('sent',[])) if avito_path.exists() else set()
+              if key in sent or keys.intersection(sent) or any(k.startswith('avito:') and k[6:] in avito_sent for k in keys):
+                  duplicates+=1
+                  return True
+
               if not send_enabled: return False
               try:
                   telegram_api('sendMessage', {'chat_id':os.environ['TELEGRAM_CHAT_ID'],'text':format_notification(company,role,title,state,evidence,ranking,source),'parse_mode':'HTML','disable_web_page_preview':True,'reply_markup':{'inline_keyboard':[[{'text':'Открыть источник вакансии' if private else 'Открыть вакансию','url':link}]]}})
-                  sent.add(key); save_history(); notifications+=1
+                  sent.update(keys); sent.add(key); save_history(); notifications+=1
                   print('SENT:',source if private else link)
                   time.sleep(1)
                   return True
@@ -531,13 +563,49 @@ jobs:
               state,evidence=experience(desc)
               return (company,role,title,link,state,evidence,priority(title,desc),source)
 
+          def parse_channel_post(msg):
+              # Only explicitly authorized public channel posts; never fetch private history.
+              chat=msg.get('chat',{})
+              channel=str(chat.get('username','')).lower()
+              if chat.get('type')!='channel' or channel not in AUTHORIZED_CHANNELS or channel not in CHANNELS:
+                  return None
+              if not msg.get('date') or time.time()-msg['date']>7*86400:
+                  return None
+              body=msg.get('text') or msg.get('caption') or ''
+              lines=[x.strip() for x in body.splitlines() if x.strip()]
+              if not lines or len(lines)<2: return None
+              # First line only: do not mistake requirements for a vacancy title.
+              title=lines[0].strip(' 🔥🚀📌⭐➡️💻🔹❤️❣️')
+              if len(title)>180 or re.search(r'подборк|несколько вакансий|топ вакансий|вакансии недели|дайджест',title,re.I):
+                  return None
+              role=classify(title)
+              if not role: return None
+              company=CHANNELS[channel]
+              if not company:
+                  # For shared channels, employer must occur in the title or explicit employer field.
+                  identity=title+' '+ ' '.join(x for x in lines[1:5] if re.match(r'^(?:компания|работодатель|company|employer)\s*:',x,re.I))
+                  names=[]
+                  for c,cfg in dict(COMPANIES,Авито={'aliases':['Авито','Avito']}).items():
+                      if any(re.search(r'(?<!\w)'+re.escape(a)+r'(?!\w)',identity,re.I) for a in cfg['aliases']):
+                          names.append(c)
+                  if len(names)!=1: return None
+                  company=names[0]
+              if company=='Wink' and not re.search(r'\bwink\b|винк',title,re.I): return None
+              if company=='Яндекс' and re.search(r'кинопоиск|kinopoisk',title,re.I): company='Кинопоиск'
+              state,evidence=experience(body)
+              mid=msg.get('message_id')
+              if not isinstance(mid,int) or mid<=0: return None
+              return (company,role,title,f'https://t.me/{channel}/{mid}',state,evidence,priority(title,body),'telegram')
           def receive_submissions():
               if not send_enabled: return
               chat=os.environ.get('TELEGRAM_CHAT_ID','')
               if not chat.isdigit(): print('SUBMISSIONS: private owner chat required'); return
               try:
-                  updates=telegram_api('getUpdates',{'offset':int(history.get('telegram_offset',0)), 'timeout':0,'limit':100,'allowed_updates':['message']})
+                  updates=telegram_api('getUpdates',{'offset':int(history.get('telegram_offset',0)), 'timeout':0,'limit':100,'allowed_updates':['message','channel_post']})
                   for update in updates:
+                      if 'channel_post' in update:
+                          job=parse_channel_post(update['channel_post'])
+                          if job and not notify(*job): break
                       msg=update.get('message',{}); c=msg.get('chat',{})
                       if c.get('type')=='private' and str(c.get('id'))==chat and str(msg.get('from',{}).get('id'))==chat:
                           text=msg.get('text','')
@@ -552,6 +620,11 @@ jobs:
               except Exception as e:
                   print('SUBMISSION ERROR:',type(e).__name__)
 
+          from datetime import datetime, timezone
+          from zoneinfo import ZoneInfo
+          def source_id(company,kind,url):
+              return company+' | '+kind+' | '+hashlib.sha256(url.encode()).hexdigest()[:12]
+          health={}
           seen_jobs=set(); outcomes={}; reports=[]; pending=[]
           MAX_PAGES=5
           MAX_DETAILS=30
@@ -587,6 +660,8 @@ jobs:
                           print('DETAIL LIMIT:',link); continue
                       if company=='Кинопоиск' and not re.search(r'кинопоиск|kinopoisk',title+' '+link,re.I):
                           print('SERVICE UNVERIFIED:',link); continue
+                      if company=='Самокат' and urlparse(link).hostname in ('ecom.tech','samokat.tech') and not re.search(r'самокат|samokat',title+' '+link,re.I):
+                          print('SERVICE UNVERIFIED:',link); continue
                       if company=='Wink' and not re.search(r'\bwink\b|винк',title+' '+link,re.I): continue
                       details+=1
                       desc_text = ""
@@ -619,6 +694,7 @@ jobs:
                           pending.append((company, role, title, link, state, evidence, ranking))
               if queue: print('PAGE LIMIT: coverage partial')
               print('SOURCE RESULT:',company,source_type,'pages',len(pages),'cards',len(cards),'new matches',matches,'errors',errors)
+              health[source_id(company,source_type,url)]=source_status(len(pages),len(cards),errors,bool(queue))
               reports.append((company,source_type,len(cards),matches,errors))
 
           assert classify('Junior Product Manager')=='Product Manager'
@@ -654,13 +730,34 @@ jobs:
           assert '<b>ЯНДЕКС</b>' in format_notification('Яндекс','Product Manager','A & B','POSSIBLE_MATCH','2 years',(2,['B2C'],[],False))
           assert 'ВНУТРЕННЯЯ ВАКАНСИЯ' in format_notification('Яндекс','Product Manager','A','POSSIBLE_MATCH','2 years',(2,[],[],False),'internal')
           assert parse_submission('/vacancy\nКомпания: Авито\nИсточник: internal\nДолжность: Product Manager\nСсылка: https://example.com/job\nОписание: Опыт от 2 лет')[4]=='POSSIBLE_MATCH'
+          assert is_vacancy('https://cian.huntflow.io/vacancy/product-manager')
+          assert not is_vacancy('https://cian.huntflow.io/')
+          assert not is_vacancy('https://other.huntflow.io/vacancy/product-manager')
+          assert parse_channel_post({'chat':{'type':'channel','username':'not_authorized'}}) is None
+          saved_channels=AUTHORIZED_CHANNELS.copy()
+          AUTHORIZED_CHANNELS.add('ya_jobs_pm')
+          sample={'chat':{'type':'channel','username':'ya_jobs_pm'},'message_id':123,'date':int(time.time()),'text':'Менеджер продукта B2C\nОпыт от 2 лет'}
+          assert parse_channel_post(sample)[0]=='Яндекс'
+          assert parse_channel_post(sample)[4]=='POSSIBLE_MATCH'
+          assert parse_channel_post(dict(sample,text='Senior Product Manager\nОпыт от 2 лет')) is None
+          assert parse_channel_post(dict(sample,text='Менеджер продукта\nОпыт от 3 лет'))[4]=='REVIEW_3_PLUS'
+          assert parse_channel_post(dict(sample,date=1)) is None
+          AUTHORIZED_CHANNELS=saved_channels
+          print('CHANNELS AUTHORIZED:',len(AUTHORIZED_CHANNELS.intersection(CHANNELS)))
           print('SELF TESTS PASSED')
+
           receive_submissions()
           for company,config in COMPANIES.items():
               for source_type in SOURCE_TYPES:
                   for url in config[source_type]:
+                      if source_type=='telegram':
+                          print('CHANNEL REFERENCE ONLY:',company,'Bot API authorization required')
+                          continue
                       try: inspect_source(company,source_type,url)
-                      except Exception as e: print('UNEXPECTED SOURCE ERROR:',company,type(e).__name__)
+                      except Exception as e:
+                          print('UNEXPECTED SOURCE ERROR:',company,type(e).__name__)
+                          reports.append((company,source_type,0,0,1))
+                          health[source_id(company,source_type,url)]='ERROR'
           for job in sorted(pending, key=lambda job: job[-1][0], reverse=True):
               notify(*job)
           print('PRIORITY HIGH:',sum(job[-1][0]==2 for job in pending))
@@ -671,7 +768,34 @@ jobs:
           for status in ('POSSIBLE_MATCH','UNKNOWN','REVIEW_3_PLUS'):
               print(status, sum(v==status for v in outcomes.values()))
           print('NOTIFICATIONS SENT:', notifications)
+          for company in COMPANIES:
+              rows=[r for r in reports if r[0]==company]
+              print('COVERAGE:',company,'sources',len(rows),'cards',sum(r[2] for r in rows),'errors',sum(r[4] for r in rows))
+          print('COVERAGE: Авито separate workflow; channel intake if authorized')
+          print('LINKEDIN: official job alerts; manual intake only until mailbox configured')
+          print('INTERNAL: authorized submission only; private portal coverage not established')
           print('NOTIFICATION ERRORS:', send_errors)
+
+          # Daily report uses completed scans, not inferred coverage. No private vacancy text.
+          if send_enabled:
+              now=datetime.now(ZoneInfo('Europe/Riga'))
+              day=now.date().isoformat()
+              stats=history.setdefault('diagnostics',{})
+              if stats.get('day')!=day:
+                  stats={'day':day,'runs':0,'sent':0,'duplicates':0,'retries':0}
+                  history['diagnostics']=stats
+              stats['runs']+=1
+              stats['sent']+=notifications
+              stats['duplicates']+=duplicates
+              stats['retries']+=retry_stats['retries']
+              stats['latest_health']=health
+              if now.hour>=20 and history.get('daily_report_sent')!=day:
+                  try:
+                      telegram_api('sendMessage',{'chat_id':os.environ['TELEGRAM_CHAT_ID'],'text':daily_message(stats)})
+                      history['daily_report_sent']=day
+                  except Exception as e:
+                      send_errors+=1; print('DAILY REPORT ERROR:',type(e).__name__)
+              save_history()
           print('DIAGNOSTICS COMPLETED')
           if send_errors: raise SystemExit(1)
           PY
