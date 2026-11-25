@@ -638,10 +638,10 @@ jobs:
           MAX_PAGES=5
           MAX_DETAILS=30
 
-          from radar_rss import rss_entries
+          from radar_rss import rss_entries, rss_originals, official_url
 
-          def inspect_source(company, source_type, url):
-              if urlparse(url).hostname=='vacario.ru':
+          def inspect_source(company, source_type, url, original_candidates=None):
+              if original_candidates is None and urlparse(url).hostname=='vacario.ru':
                   # Use the published personal RSS subscription, not the HTML catalogue.
                   # A feed is discovery only; no notifications on unverified listings.
                   try:
@@ -653,7 +653,9 @@ jobs:
                           print('RSS CANDIDATE (unverified):',company,'|',title,'|',link)
                       health[source_id(company,source_type,url)]='PARTIAL' if entries else 'NO_CARDS_UNVERIFIED'
                       reports.append((company,source_type,len(entries),len(target),0))
-                      print('RSS DISCOVERY:',company,'entries',len(entries),'role candidates',len(target),'notifications disabled until original verified')
+                      originals=[(original,title) for _,title,original in rss_originals(body,company) if classify(title) and (company!='Кинопоиск' or re.search(r'кинопоиск|kinopoisk',title+' '+original,re.I))]
+                      print('RSS DISCOVERY:',company,'entries',len(entries),'role candidates',len(target),'explicit original links',len(originals))
+                      if originals: inspect_source(company,source_type,url,originals)
                   except Exception as e:
                       health[source_id(company,source_type,url)]='ERROR'
                       reports.append((company,source_type,0,0,1))
@@ -665,22 +667,25 @@ jobs:
                   current=queue.popleft()
                   if current in pages: continue
                   pages.add(current)
-                  try: final, body, parser=get_page(current)
-                  except Exception as e:
-                      print('SOURCE ERROR:',type(e).__name__,str(e)[:180]); errors+=1; continue
-                  print('PAGE:',final,'LINKS:',len(parser.links))
-                  candidates=[]
-                  for href,title in parser.links:
-                      full=urljoin(final,href)
-                      p=urlparse(full); f=urlparse(final)
-                      if p.scheme!='https': continue
-                      if is_vacancy(full): candidates.append((full,title))
-                      if p.netloc==f.netloc and p.path.rstrip('/')==f.path.rstrip('/') and any(re.fullmatch(r'(?:page|pagen_\d+|p|offset)',k,re.I) for k in parse_qs(p.query)) and full not in pages:
-                          queue.append(full)
-                      # Avoid printing every navigation link.
-                  for obj in job_objects(body):
-                      link=urljoin(final,str(obj.get('url') or final)); title=str(obj.get('title') or '')
-                      if urlparse(link).netloc==urlparse(final).netloc and title: candidates.append((link,title))
+                  if original_candidates is not None:
+                      candidates=original_candidates
+                  else:
+                      try: final, body, parser=get_page(current)
+                      except Exception as e:
+                          print('SOURCE ERROR:',type(e).__name__,str(e)[:180]); errors+=1; continue
+                      print('PAGE:',final,'LINKS:',len(parser.links))
+                      candidates=[]
+                      for href,title in parser.links:
+                          full=urljoin(final,href)
+                          p=urlparse(full); f=urlparse(final)
+                          if p.scheme!='https': continue
+                          if is_vacancy(full): candidates.append((full,title))
+                          if p.netloc==f.netloc and p.path.rstrip('/')==f.path.rstrip('/') and any(re.fullmatch(r'(?:page|pagen_\d+|p|offset)',k,re.I) for k in parse_qs(p.query)) and full not in pages:
+                              queue.append(full)
+                          # Avoid printing every navigation link.
+                      for obj in job_objects(body):
+                          link=urljoin(final,str(obj.get('url') or final)); title=str(obj.get('title') or '')
+                          if urlparse(link).netloc==urlparse(final).netloc and title: candidates.append((link,title))
                   for link,title in candidates:
                       key=(company,canonical(link)); cards.add(key[1])
                       role=classify(title)
@@ -697,7 +702,9 @@ jobs:
                       details+=1
                       desc_text = ""
                       try:
-                          _,detail,dp=get_page(link)
+                          final_detail,detail,dp=get_page(link)
+                          if original_candidates is not None and official_url(company,final_detail) is None:
+                              limited=True; print('RSS ORIGINAL REDIRECT UNVERIFIED:',link); continue
                           objects=list(job_objects(detail)); txt=' '.join(dp.text)
                           source_host=urlparse(link).hostname
                           aliases=COMPANIES[company]['aliases']
@@ -744,8 +751,12 @@ jobs:
                           pending.append((company, role, title, link, state, evidence, ranking))
               if queue: print('PAGE LIMIT: coverage partial')
               print('SOURCE RESULT:',company,source_type,'pages',len(pages),'cards',len(cards),'new matches',matches,'errors',errors)
-              health[source_id(company,source_type,url)]=source_status(len(pages),len(cards),errors,bool(queue) or limited)
-              reports.append((company,source_type,len(cards),matches,errors))
+              if original_candidates is not None:
+                  print('RSS ORIGINAL VERIFICATION:',company,'checked',details,'matches',matches,'errors',errors)
+                  health[source_id(company,source_type,url)]='PARTIAL'
+              else:
+                  health[source_id(company,source_type,url)]=source_status(len(pages),len(cards),errors,bool(queue) or limited)
+                  reports.append((company,source_type,len(cards),matches,errors))
 
           assert classify('Junior Product Manager')=='Product Manager'
           assert classify('Продуктовый аналитик')=='Product Analyst'
