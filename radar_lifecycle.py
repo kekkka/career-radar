@@ -38,3 +38,30 @@ def archived_label(chunks,title):
         if c==title:
             return any(x in ('в архиве','архивная вакансия','архив','vacancy archived','closed','expired') for x in clean[max(0,i-3):i+10])
     return False
+
+
+def posting_experience(postings):
+    """Schema.org minimum months are candidate requirements."""
+    result=[]
+    for p in postings:
+        x=p.get('experienceRequirements')
+        if isinstance(x,dict):
+            months=x.get('monthsOfExperience')
+            try:
+                if isinstance(months,bool): continue
+                n=float(months)
+                if not 0<=n<=600: continue
+                result.append(('REVIEW_3_PLUS' if n>24 else 'POSSIBLE_MATCH',f'{n/12:g} years'))
+            except (TypeError,ValueError): continue
+        elif isinstance(x,str):
+            from radar_experience import experience
+            result.append(experience(x))
+    from radar_experience import combine_experience
+    return combine_experience(*result)
+
+def active_application(chunks,links,title):
+    """Conservative positive evidence for public application availability."""
+    clean=[re.sub(r'\s+',' ',str(x)).strip().casefold() for x in chunks]
+    if archived_label(chunks,title) or is_closed(' '.join(clean)): return False
+    if any(re.fullmatch(r'(?:откликнуться(?: на вакансию)?|отправить отклик|apply(?: now)?|подать заявку)',x) for x in clean): return True
+    return any(re.fullmatch(r'(?:откликнуться(?: на вакансию)?|отправить отклик|apply(?: now)?|подать заявку)',str(label).strip().casefold()) for _,label in links)
