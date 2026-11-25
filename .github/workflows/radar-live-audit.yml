@@ -5,8 +5,11 @@ on:
     paths:
       - '.github/workflows/radar-live-audit.yml'
       - '.github/workflows/career-monitor.yml'
+      - '.github/workflows/avito-monitor.yml'
       - 'radar_rss.py'
       - 'radar_quality.py'
+      - 'radar_experience.py'
+      - 'radar_lifecycle.py'
   workflow_dispatch:
 permissions:
   contents: read
@@ -15,14 +18,19 @@ concurrency:
   cancel-in-progress: false
 jobs:
   audit:
+    strategy:
+      fail-fast: false
+      matrix:
+        monitor: [career-monitor, avito-monitor]
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
       - name: Public source dry run (no notifications)
         env:
+          MONITOR: ${{ matrix.monitor }}
           SEND_NOTIFICATIONS: 'false'
           LINKEDIN_ONLY: 'false'
           LINKEDIN_RECORDS: '[]'
@@ -30,14 +38,21 @@ jobs:
           PYTHONUNBUFFERED: '1'
         run: |
           python3 -u - <<'PY'
-          import textwrap
+          import textwrap, tempfile, shutil, sys, os
           from pathlib import Path
-          import os
           os.environ.pop('TELEGRAM_BOT_TOKEN',None)
           os.environ.pop('TELEGRAM_CHAT_ID',None)
-          path=Path('.github/workflows/career-monitor.yml')
+          root=Path.cwd()
+          sys.path.insert(0,str(root))
+          path=root/'.github/workflows'/(os.environ['MONITOR']+'.yml')
           code=path.read_text().split("python3 -u - <<'PY'\n",1)[1].split('\n          PY',1)[0]
-          exec(compile(textwrap.dedent(code),str(path),'exec'),{'__name__':'__main__'})
+          with tempfile.TemporaryDirectory() as temp:
+              shutil.copytree(root/'data',Path(temp)/'data')
+              os.chdir(temp)
+              try:
+                  exec(compile(textwrap.dedent(code),str(path),'exec'),{'__name__':'__main__'})
+              finally:
+                  os.chdir(root)
           PY
       - name: Confirm histories unchanged
         if: always()
