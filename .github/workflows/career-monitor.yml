@@ -6,6 +6,14 @@ on:
         description: 'Send vacancy notifications to Telegram'
         type: boolean
         default: false
+      linkedin_records:
+        description: 'Public vacancy facts only; no email contents'
+        type: string
+        default: '[]'
+      linkedin_only:
+        description: 'Process LinkedIn batch without crawling sites'
+        type: boolean
+        default: false
   schedule:
     - cron: '17,47 * * * *'
 permissions:
@@ -25,6 +33,8 @@ jobs:
       - name: Check career sources V1.0
         env:
           PYTHONUNBUFFERED: "1"
+          LINKEDIN_RECORDS: ${{ inputs.linkedin_records }}
+          LINKEDIN_ONLY: ${{ inputs.linkedin_only }}
           SEND_NOTIFICATIONS: ${{ github.event_name == 'schedule' || inputs.send_notifications }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -424,33 +434,7 @@ jobs:
                   try: yield from walk(json.loads(m.group(1)))
                   except (ValueError,TypeError): continue
 
-          def experience(text):
-              text = re.sub(r'\s+', ' ', text.lower().replace('ё','е'))
-              vals = {'один':1,'одного':1,'одной':1,'два':2,'двух':2,'три':3,'трех':3,'четыре':4,'четырех':4,'пять':5,'пяти':5,'шесть':6,'шести':6,'семь':7,'семи':7,'one':1,'two':2,'three':3,'four':4,'five':5,'six':6,'seven':7}
-              num = r'(?:\d+(?:[.,]\d+)?|'+'|'.join(vals)+r')'
-              pat = re.compile(r'(?<![\w.,])(?P<lower>'+num+r')\s*(?:(?:[-–—−]|до|to)\s*'+num+r'\s*)?\+?\s*(?P<unit>лет|год(?:а|ов)?|years?|yrs?|месяц(?:а|ев)?|months?)\b')
-              found=[]; optional=[]
-              for m in pat.finditer(text):
-                  prefix=text[max(0,m.start()-120):m.start()]
-                  suffix=text[m.end():m.end()+100]
-                  n=m.group('lower'); years=vals[n] if n in vals else float(n.replace(',','.'))
-                  if m.group('unit').startswith(('месяц','month')): years/=12
-                  # An explicit preference must modify the duration itself, not a later skill.
-                  if re.search(r'(?:желательно|будет плюсом|nice to have|preferred)\s*[:—-]?\s*(?:опыт\s*(?:работы\s*)?)?(?:от\s*)?$',prefix) or re.match(r'\s*(?:опыта\s*)?(?:будет|является)\s+(?:плюсом|преимуществом)',suffix) or re.match(r'\s+(?:of\s+experience\s+)?(?:is\s+)?preferred\b',suffix):
-                      optional.append(years); continue
-                  over=bool(re.search(r'(?:более|свыше|больше|more than|over)\s*$',prefix))
-                  # Conservative: any duration above the limit is held, even if context is unclear.
-                  if years>2 or (years==2 and over):
-                      return 'REVIEW_3_PLUS', m.group(0)
-                  context=prefix[-100:]+' '+suffix[:65]
-                  if re.search(r'опыт|работал|работа|работаете|стаж|experience|worked|working|product manager|продакт|менеджер|аналитик|(?:от|минимум|at least)\s*$',context):
-                      found.append(years)
-              if found:
-                  return 'POSSIBLE_MATCH', f'{max(found):g} years'
-              if re.search(r'без опыта|опыт не обязателен|no experience required',text):
-                  return 'POSSIBLE_MATCH','0 years'
-              if optional: return 'UNKNOWN','Optional experience only'
-              return 'UNKNOWN','No reliable evidence'
+          from radar_experience import experience
 
           def priority(title, description):
               # Title and job description only; never infer B2C from employer name.
@@ -681,7 +665,7 @@ jobs:
                                   hp=Parser(); hp.feed(heading); candidate=' '.join(hp.text).strip()
                                   if classify(candidate): title=candidate; role=classify(candidate); break
                               desc_text=txt
-                          state,evidence=experience(txt)
+                          state,evidence=experience(desc_text)
                       except Exception as e:
                           state,evidence='UNKNOWN',type(e).__name__
                       seen_jobs.add(key); matches+=1
@@ -746,8 +730,17 @@ jobs:
           print('CHANNELS AUTHORIZED:',len(AUTHORIZED_CHANNELS.intersection(CHANNELS)))
           print('SELF TESTS PASSED')
 
-          receive_submissions()
-          for company,config in COMPANIES.items():
+          from linkedin_intake import linkedin_records
+          linkedin_only=os.getenv('LINKEDIN_ONLY','').lower()=='true'
+          records=linkedin_records(os.getenv('LINKEDIN_RECORDS',''),set(COMPANIES)|{'Авито'})
+          print('LINKEDIN VALID RECORDS:',len(records))
+          for company,title,link,years in records:
+              role=classify(title)
+              if role:
+                  if send_enabled: notify(company,role,title,link,'POSSIBLE_MATCH',f'{years:g} years',priority(title,''),'linkedin')
+                  else: print('LINKEDIN DRY RUN: eligible record')
+          if not linkedin_only: receive_submissions()
+          for company,config in ({} if linkedin_only else COMPANIES).items():
               for source_type in SOURCE_TYPES:
                   for url in config[source_type]:
                       if source_type=='telegram':
@@ -772,12 +765,12 @@ jobs:
               rows=[r for r in reports if r[0]==company]
               print('COVERAGE:',company,'sources',len(rows),'cards',sum(r[2] for r in rows),'errors',sum(r[4] for r in rows))
           print('COVERAGE: Авито separate workflow; channel intake if authorized')
-          print('LINKEDIN: official job alerts; manual intake only until mailbox configured')
+          print('LINKEDIN: validated public facts accepted via manual dispatch')
           print('INTERNAL: authorized submission only; private portal coverage not established')
           print('NOTIFICATION ERRORS:', send_errors)
 
           # Daily report uses completed scans, not inferred coverage. No private vacancy text.
-          if send_enabled:
+          if send_enabled and not linkedin_only:
               now=datetime.now(ZoneInfo('Europe/Riga'))
               day=now.date().isoformat()
               stats=history.setdefault('diagnostics',{})
