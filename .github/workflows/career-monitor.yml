@@ -30,7 +30,7 @@ jobs:
   monitor:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - name: Offline quality tests
@@ -618,6 +618,8 @@ jobs:
               chat=os.environ.get('TELEGRAM_CHAT_ID','')
               if not chat.isdigit(): print('SUBMISSIONS: private owner chat required'); return
               try:
+                  from radar_commands import command_keyboard
+                  telegram_api('setMyCommands',{'commands':[{'command':'start','description':'Запустить поиск по всем работодателям'},{'command':'status','description':'Получить единый отчёт'}],'scope':{'type':'chat','chat_id':int(chat)}})
                   updates=telegram_api('getUpdates',{'offset':int(history.get('telegram_offset',0)), 'timeout':0,'limit':100,'allowed_updates':['message','channel_post']})
                   for update in updates:
                       if 'channel_post' in update:
