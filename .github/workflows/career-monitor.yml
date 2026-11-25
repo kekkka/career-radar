@@ -1,5 +1,9 @@
 name: Career Monitor
 on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/career-monitor.yml'
   workflow_dispatch:
     inputs:
       send_notifications:
@@ -15,7 +19,8 @@ on:
         type: boolean
         default: false
   schedule:
-    - cron: '17 * * * *'
+    - cron: '19 * * * *'
+    - cron: '29,39,49,59 * * * *'
 permissions:
   contents: write
 concurrency:
@@ -35,7 +40,8 @@ jobs:
           PYTHONUNBUFFERED: "1"
           LINKEDIN_RECORDS: ${{ inputs.linkedin_records }}
           LINKEDIN_ONLY: ${{ inputs.linkedin_only }}
-          SEND_NOTIFICATIONS: ${{ github.event_name == 'schedule' || inputs.send_notifications }}
+          SEND_NOTIFICATIONS: ${{ github.event_name == 'schedule' || github.event_name == 'push' || inputs.send_notifications }}
+          COMMANDS_ONLY: ${{ github.event_name == 'push' || github.event.schedule == '29,39,49,59 * * * *' }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           AUTHORIZED_VACANCY_CHANNELS: ${{ vars.AUTHORIZED_VACANCY_CHANNELS }}
@@ -634,6 +640,7 @@ jobs:
                   print('SUBMISSIONS CHECKED:',len(updates))
               except Exception as e:
                   print('SUBMISSION ERROR:',type(e).__name__)
+                  raise SystemExit('Telegram intake failed') from None
 
           from datetime import datetime, timezone
           from zoneinfo import ZoneInfo
@@ -828,6 +835,10 @@ jobs:
               print('LINKEDIN PAUSED: no records processed')
               raise SystemExit(0)
           if not linkedin_only: receive_submissions()
+          if os.getenv('COMMANDS_ONLY','').lower()=='true':
+              print('COMMAND POLL COMPLETED; no site scan')
+              if send_errors: raise SystemExit(1)
+              raise SystemExit(0)
           # These employers are optional: no periodic site/RSS scanning, but verified inbound submissions remain accepted.
           OPTIONAL_EMPLOYERS=set()
           for company,config in ({} if linkedin_only else COMPANIES).items():
@@ -901,7 +912,7 @@ jobs:
           if send_errors: raise SystemExit(1)
           PY
       - name: Save public vacancy history
-        if: always() && (github.event_name == 'schedule' || inputs.send_notifications)
+        if: always() && (github.event_name == 'schedule' || github.event_name == 'push' || inputs.send_notifications)
         run: |
           if [ ! -f data/career_history.json ]; then exit 0; fi
           git config user.name 'github-actions[bot]'
