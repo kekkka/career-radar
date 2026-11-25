@@ -18,7 +18,7 @@ jobs:
           python3 -m pip install playwright
           python3 -m playwright install --with-deps chromium
 
-      - name: Read full vacancy
+      - name: Check vacancy content
         run: |
           python3 - <<'PY'
           import re
@@ -61,42 +61,87 @@ jobs:
 
               page.wait_for_timeout(10000)
 
-              page.locator("body").evaluate(
-                  "(element) => element.scrollIntoView()"
-              )
-
-              page.evaluate(
-                  "window.scrollTo(0, document.body.scrollHeight)"
-              )
-
-              page.wait_for_timeout(3000)
-
-              print("PAGE TITLE:", page.title())
-
-              print("HEADINGS:")
-              for heading in page.locator(
-                  "h1, h2, h3, h4"
-              ).all_inner_texts():
-                  print(heading)
+              for _ in range(6):
+                  page.mouse.wheel(0, 700)
+                  page.wait_for_timeout(1500)
 
               text = page.locator("body").inner_text()
+              title = page.title()
 
-              print("FULL DESCRIPTION:")
-              print(text[:30000])
+              print("VACANCY:", title)
 
-              matches = re.findall(
-                  r".{0,100}(?:опыт|experience|стаж).{0,180}",
+              markers = [
+                  "О команде",
+                  "Команда Support Automation развивает",
+                  "Вам предстоит",
+                  "Вам нужно будет",
+                  "Мы ждём",
+                  "Мы ждем",
+                  "Требования",
+                  "Что мы ожидаем",
+                  "Чем предстоит заниматься"
+              ]
+
+              found = []
+
+              for marker in markers:
+                  if marker.lower() in text.lower():
+                      found.append(marker)
+
+              print("DESCRIPTION MARKERS:", found)
+
+              lines = [
+                  line.strip()
+                  for line in text.splitlines()
+                  if line.strip()
+              ]
+
+              start = None
+
+              for i, line in enumerate(lines):
+                  if any(
+                      marker.lower() in line.lower()
+                      for marker in markers
+                  ):
+                      start = i
+                      break
+
+              if start is not None:
+                  print("DESCRIPTION FOUND: YES")
+
+                  for line in lines[start:]:
+                      if line.lower() == "похожие вакансии":
+                          break
+                      print(line)
+
+              else:
+                  print("DESCRIPTION FOUND: NO")
+
+              print("EXPERIENCE REQUIREMENTS:")
+
+              if start is not None:
+                  for line in lines[start:]:
+                      if line.lower() == "похожие вакансии":
+                          break
+
+                      if re.search(
+                          r"опыт|стаж|experience",
+                          line,
+                          re.IGNORECASE
+                      ):
+                          print(line)
+              else:
+                  print("Experience unknown")
+
+              employee_login = bool(re.search(
+                  r"войдите как сотрудник",
                   text,
-                  flags=re.IGNORECASE
-              )
+                  re.IGNORECASE
+              ))
 
-              print("EXPERIENCE MENTIONS:")
-              for match in matches:
-                  print(match)
-
-              print("TEXT LENGTH:", len(text))
+              print("EMPLOYEE LOGIN NOTICE:", employee_login)
 
               browser.close()
 
-          print("BROWSER TEST COMPLETED")
+          print("DIAGNOSTICS COMPLETED")
           PY
