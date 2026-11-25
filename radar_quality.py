@@ -20,7 +20,21 @@ def identity_keys(company, link):
         if m: return {'avito:'+m[1].lower()}
     # Hash all URLs, including forwarded links. Do not store private URL text.
     normalized='https://'+p.netloc.lower()+path+('?' + query if query else '')
-    return {'url:'+hashlib.sha256(normalized.encode()).hexdigest()}
+    keys={'url:'+hashlib.sha256(normalized.encode()).hexdigest()}
+    # Keep the historic URL key and add publisher-specific immutable IDs.
+    # Never deduplicate solely by title/employer: distinct openings may share a title.
+    patterns=[
+        (('yandex.ru','www.yandex.ru'),r'/jobs/vacancies/[^/]+-(\d+)', 'yandex'),
+        (('tbank.ru','www.tbank.ru'),r'/career/it/vacancy/.+/([0-9a-fA-F-]{36})','tbank'),
+        (('aviasales.ru','www.aviasales.ru'),r'/about/vacancies/(\d+)','aviasales'),
+        (('career.habr.com',),r'/vacancies/(\d+)','habr'),
+        (('h.careers',),r'/job/([0-9a-fA-F-]{36})','hcareers'),
+    ]
+    for hosts,pattern,namespace in patterns:
+        if host in hosts:
+            m=re.fullmatch(pattern,path)
+            if m: keys.add(namespace+':'+m[1].lower())
+    return keys
 
 def retry_fetch(request, stats, sleep=time.sleep):
     for attempt in range(3):
