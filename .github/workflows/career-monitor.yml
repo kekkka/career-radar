@@ -401,7 +401,7 @@ jobs:
               rp = robot_cache[root]
               return rp is not None and rp.can_fetch(AGENT, url)
 
-          from radar_lifecycle import is_closed, vacancy_key, belongs_to_habr
+          from radar_lifecycle import is_closed, vacancy_key, belongs_to_habr, archived_label
           from functools import lru_cache
           @lru_cache(maxsize=32)
           def get_page(url):
@@ -445,7 +445,7 @@ jobs:
                   try: yield from walk(json.loads(m.group(1)))
                   except (ValueError,TypeError): continue
 
-          from radar_experience import experience
+          from radar_experience import experience, header_experience, requirements_text, combine_experience
 
           def priority(title, description):
               # Title and job description only; never infer B2C from employer name.
@@ -675,15 +675,18 @@ jobs:
                               if actual_title:
                                   title=actual_title; role=classify(title)
                                   if not role: continue
-                              desc=Parser(); desc.feed(str(obj.get('description') or '')); desc_text=' '.join(desc.text); txt=txt+' '+desc_text
+                              desc=Parser(); desc.feed(str(obj.get('description') or '')); desc_text=requirements_text(desc.text); txt=txt+' '+desc_text
                           else:
                               # Prefer an actual heading to the navigation/card tags.
                               headings=re.findall(r'<h1\b[^>]*>(.*?)</h1\s*>',detail,re.I|re.S)
                               for heading in headings:
                                   hp=Parser(); hp.feed(heading); candidate=' '.join(hp.text).strip()
                                   if classify(candidate): title=candidate; role=classify(candidate); break
-                              desc_text=txt
-                          state,evidence=experience(desc_text)
+                              desc_text=requirements_text(dp.text)
+                          if archived_label(dp.text,title):
+                              outcomes[key]='CLOSED'; seen_jobs.add(key)
+                              print('ARCHIVED BADGE:',link); continue
+                          state,evidence=combine_experience(experience(desc_text),header_experience(dp.text,title))
                       except Exception as e:
                           errors+=1
                           state,evidence='UNKNOWN',type(e).__name__
