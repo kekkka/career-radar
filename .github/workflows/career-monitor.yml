@@ -749,6 +749,7 @@ jobs:
           print('CHANNELS AUTHORIZED:',len(AUTHORIZED_CHANNELS.intersection(CHANNELS)))
           print('SELF TESTS PASSED')
 
+          scan_started=time.monotonic()
           from linkedin_intake import linkedin_records
           linkedin_only=os.getenv('LINKEDIN_ONLY','').lower()=='true'
           records=linkedin_records(os.getenv('LINKEDIN_RECORDS',''),set(COMPANIES)|{'Авито'})
@@ -779,7 +780,9 @@ jobs:
           print('UNIQUE PRODUCT MATCHES:',len(outcomes))
           for status in ('POSSIBLE_MATCH','UNKNOWN','REVIEW_3_PLUS','CLOSED'):
               print(status, sum(v==status for v in outcomes.values()))
+          print('ELIGIBLE NEW VACANCIES:',sum(job[4]=='POSSIBLE_MATCH' for job in pending))
           print('NOTIFICATIONS SENT:', notifications)
+          print('ELAPSED SECONDS:',round(time.monotonic()-scan_started))
           for company in COMPANIES:
               rows=[r for r in reports if r[0]==company]
               print('COVERAGE:',company,'sources',len(rows),'cards',sum(r[2] for r in rows),'errors',sum(r[4] for r in rows))
