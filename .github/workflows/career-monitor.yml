@@ -6,6 +6,14 @@ on:
         description: 'Send vacancy notifications to Telegram'
         type: boolean
         default: false
+      linkedin_records:
+        description: 'Public vacancy facts only; no email contents'
+        type: string
+        default: '[]'
+      linkedin_only:
+        description: 'Process LinkedIn batch without crawling sites'
+        type: boolean
+        default: false
   schedule:
     - cron: '17,47 * * * *'
 permissions:
@@ -25,6 +33,8 @@ jobs:
       - name: Check career sources V1.0
         env:
           PYTHONUNBUFFERED: "1"
+          LINKEDIN_RECORDS: ${{ inputs.linkedin_records }}
+          LINKEDIN_ONLY: ${{ inputs.linkedin_only }}
           SEND_NOTIFICATIONS: ${{ github.event_name == 'schedule' || inputs.send_notifications }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -746,8 +756,17 @@ jobs:
           print('CHANNELS AUTHORIZED:',len(AUTHORIZED_CHANNELS.intersection(CHANNELS)))
           print('SELF TESTS PASSED')
 
-          receive_submissions()
-          for company,config in COMPANIES.items():
+          from linkedin_intake import linkedin_records
+          linkedin_only=os.getenv('LINKEDIN_ONLY','').lower()=='true'
+          records=linkedin_records(os.getenv('LINKEDIN_RECORDS',''),set(COMPANIES)|{'Авито'})
+          print('LINKEDIN VALID RECORDS:',len(records))
+          for company,title,link,years in records:
+              role=classify(title)
+              if role:
+                  if send_enabled: notify(company,role,title,link,'POSSIBLE_MATCH',f'{years:g} years',priority(title,''),'linkedin')
+                  else: print('LINKEDIN DRY RUN: eligible record')
+          if not linkedin_only: receive_submissions()
+          for company,config in ({} if linkedin_only else COMPANIES).items():
               for source_type in SOURCE_TYPES:
                   for url in config[source_type]:
                       if source_type=='telegram':
@@ -772,12 +791,12 @@ jobs:
               rows=[r for r in reports if r[0]==company]
               print('COVERAGE:',company,'sources',len(rows),'cards',sum(r[2] for r in rows),'errors',sum(r[4] for r in rows))
           print('COVERAGE: Авито separate workflow; channel intake if authorized')
-          print('LINKEDIN: official job alerts; manual intake only until mailbox configured')
+          print('LINKEDIN: validated public facts accepted via manual dispatch')
           print('INTERNAL: authorized submission only; private portal coverage not established')
           print('NOTIFICATION ERRORS:', send_errors)
 
           # Daily report uses completed scans, not inferred coverage. No private vacancy text.
-          if send_enabled:
+          if send_enabled and not linkedin_only:
               now=datetime.now(ZoneInfo('Europe/Riga'))
               day=now.date().isoformat()
               stats=history.setdefault('diagnostics',{})
