@@ -824,7 +824,12 @@ jobs:
                   if send_enabled: notify(company,role,title,link,'POSSIBLE_MATCH',f'{years:g} years',priority(title,''),'linkedin')
                   else: print('LINKEDIN DRY RUN: eligible record')
           if not linkedin_only: receive_submissions()
+          # These employers are optional: no periodic site/RSS scanning, but verified inbound submissions remain accepted.
+          OPTIONAL_EMPLOYERS={'Т-Банк','Точка'}
           for company,config in ({} if linkedin_only else COMPANIES).items():
+              if company in OPTIONAL_EMPLOYERS:
+                  print('OPTIONAL EMPLOYER: periodic scan disabled',company)
+                  continue
               for source_type in SOURCE_TYPES:
                   for url in config[source_type]:
                       if source_type=='telegram':
@@ -848,6 +853,8 @@ jobs:
           print('NOTIFICATIONS SENT:', notifications)
           print('ELAPSED SECONDS:',round(time.monotonic()-scan_started))
           for company in COMPANIES:
+              if company in OPTIONAL_EMPLOYERS:
+                  print('COVERAGE:',company,'OPTIONAL / INBOUND ONLY'); continue
               rows=[r for r in reports if r[0]==company]
               print('COVERAGE:',company,'sources',len(rows),'cards',sum(r[2] for r in rows),'errors',sum(r[4] for r in rows))
           print('COVERAGE: Авито separate workflow; channel intake if authorized')
