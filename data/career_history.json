@@ -3,6 +3,7 @@
     "107998aa3861557accf76bdb078b2fe95c62f30d3c5d49a7d536cad353711f40",
     "1be97ad889bb42ff8fdc69c0c473e5979d035837061bbbe298d33dac9aa60326",
     "224bce5da9450333d906977e624e68a3933aaec8f16a2caff427f44dfd727b29",
+    "2a9a064a054f156bdab5fe96a54a5f0f0e4165263f12eee89e233048783e04d6",
     "31be21536adc2f61efd6d41f5c46a707f575efa9b2ac07c1403794dd1ac00bbf",
     "35b093d0bde53ca4a2de47ace25910172b2576484c297aa53658496b69df8052",
     "5f341e7faafbda03085ad65c9ebe74c1fad2794b9b37f760b10bd67936275a4d",
@@ -13,6 +14,41 @@
     "a7d264719e614398156b48b789b8cd45d9bfb51b27aa45d8fdc644abcffc4c11",
     "b9ec0594ffdf42867bb3b71ed5b8a2305b22a9e004ea32e1fce98ebc3a7bb9a3",
     "ba2c001d6c272f0196b22363ff5b029f494350041ad508246f60f82df5debbd3",
-    "e663a333d7bb35091f20ff2414ef5231c9e3be6a73691eebd533046fe6938450"
-  ]
+    "e663a333d7bb35091f20ff2414ef5231c9e3be6a73691eebd533046fe6938450",
+    "url:2a9a064a054f156bdab5fe96a54a5f0f0e4165263f12eee89e233048783e04d6"
+  ],
+  "diagnostics": {
+    "day": "2026-11-25",
+    "runs": 1,
+    "sent": 1,
+    "duplicates": 0,
+    "retries": 4,
+    "latest_health": {
+      "\u042f\u043d\u0434\u0435\u043a\u0441 | career | ba7fd5246576": "CARDS_FOUND",
+      "\u042f\u043d\u0434\u0435\u043a\u0441 | career | ac39334bb78d": "CARDS_FOUND",
+      "\u042f\u043d\u0434\u0435\u043a\u0441 | career | 8fe1799d2b55": "CARDS_FOUND",
+      "\u042f\u043d\u0434\u0435\u043a\u0441 | career | d11c130f38ab": "CARDS_FOUND",
+      "\u0421\u0430\u043c\u043e\u043a\u0430\u0442 | career | 140e42fbe8e6": "ERROR",
+      "\u0421\u0430\u043c\u043e\u043a\u0430\u0442 | career | 08eb1e9f857e": "ERROR",
+      "\u0421\u0430\u043c\u043e\u043a\u0430\u0442 | career | 3791dd79bf10": "ERROR",
+      "\u0412\u043a\u0443\u0441\u0412\u0438\u043b\u043b | career | 80b81e78a271": "CARDS_FOUND",
+      "Dodo Brands | career | 0d7f741ec106": "ERROR",
+      "Dodo Brands | career | 75551ad5ce29": "NO_CARDS_UNVERIFIED",
+      "\u0422-\u0411\u0430\u043d\u043a | career | 7ff526bd2c43": "ERROR",
+      "\u0422-\u0411\u0430\u043d\u043a | career | c0c22dd6a19e": "ERROR",
+      "\u0422\u043e\u0447\u043a\u0430 | career | 4617e919cfe2": "ERROR",
+      "\u0422\u043e\u0447\u043a\u0430 | career | 67132b3f8d6b": "ERROR",
+      "\u0410\u0432\u0438\u0430\u0441\u0435\u0439\u043b\u0441 | career | dd72c88f61d2": "CARDS_FOUND",
+      "\u0426\u0438\u0430\u043d | career | e81987fc685f": "NO_CARDS_UNVERIFIED",
+      "\u0426\u0438\u0430\u043d | career | d7bbce0f762d": "CARDS_FOUND",
+      "\u0415\u0410\u041f\u0422\u0415\u041a\u0410 | career | 05c5333502b7": "NO_CARDS_UNVERIFIED",
+      "Skyeng | career | 017398c3b082": "NO_CARDS_UNVERIFIED",
+      "Skyeng | referral | 12e35907f886": "NO_CARDS_UNVERIFIED",
+      "\u041a\u0438\u043d\u043e\u043f\u043e\u0438\u0441\u043a | career | 4fa390a6ab6e": "NO_CARDS_UNVERIFIED",
+      "START | career | 46a708e6bc95": "NO_CARDS_UNVERIFIED",
+      "START | career | 0e934fcf1a32": "NO_CARDS_UNVERIFIED",
+      "Wink | career | 0f18c43dbf95": "NO_CARDS_UNVERIFIED",
+      "Wink | career | ef084b11a41a": "NO_CARDS_UNVERIFIED"
+    }
+  }
 }
