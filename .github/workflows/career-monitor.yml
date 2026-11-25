@@ -634,7 +634,7 @@ jobs:
           def source_id(company,kind,url):
               return company+' | '+kind+' | '+hashlib.sha256(url.encode()).hexdigest()[:12]
           health={}
-          seen_jobs=set(); outcomes={}; reports=[]; pending=[]
+          seen_jobs=set(); seen_ids=set(); outcomes={}; reports=[]; pending=[]
           MAX_PAGES=5
           MAX_DETAILS=30
 
@@ -690,6 +690,7 @@ jobs:
                       key=(company,canonical(link)); cards.add(key[1])
                       role=classify(title)
                       if not role or key in seen_jobs: continue
+                      if identity_keys(company,link).intersection(seen_ids): continue
                       if source_type=='career' and identity_keys(company,link).intersection(sent):
                           continue
                       if details>=MAX_DETAILS:
@@ -715,7 +716,7 @@ jobs:
                           if source_host in ('career.habr.com','vacario.ru') and not belongs_to_habr(objects,aliases):
                               limited=True; print('EMPLOYER UNVERIFIED:',link); continue
                           if is_closed(txt,objects):
-                              outcomes[key]='CLOSED'; seen_jobs.add(key)
+                              outcomes[key]='CLOSED'; seen_jobs.add(key); seen_ids.update(identity_keys(company,link))
                               print('CLOSED VACANCY:',link); continue
                           if objects:
                               obj=objects[0]; actual_title=str(obj.get('title') or '').strip();
@@ -731,7 +732,7 @@ jobs:
                                   if classify(candidate): title=candidate; role=classify(candidate); break
                               desc_text=requirements_text(dp.text)
                           if archived_label(dp.text,title):
-                              outcomes[key]='CLOSED'; seen_jobs.add(key)
+                              outcomes[key]='CLOSED'; seen_jobs.add(key); seen_ids.update(identity_keys(company,link))
                               print('ARCHIVED BADGE:',link); continue
                           state,evidence=combine_experience(experience(desc_text),header_experience(dp.text,title),posting_experience(objects))
                           if state=='POSSIBLE_MATCH' and not active_application(dp.text,dp.links,title):
@@ -741,7 +742,9 @@ jobs:
                       except Exception as e:
                           errors+=1
                           state,evidence='UNKNOWN',type(e).__name__
-                      seen_jobs.add(key); matches+=1
+                      if state!='UNKNOWN':
+                          seen_jobs.add(key); seen_ids.update(identity_keys(company,link))
+                      matches+=1
                       outcomes[key]=state
                       print('PRODUCT MATCH:',company,'|',role,'|',title,'|',link)
                       print('EXPERIENCE:',state,'|',evidence,'|',link)
@@ -753,6 +756,9 @@ jobs:
               print('SOURCE RESULT:',company,source_type,'pages',len(pages),'cards',len(cards),'new matches',matches,'errors',errors)
               if original_candidates is not None:
                   print('RSS ORIGINAL VERIFICATION:',company,'checked',details,'matches',matches,'errors',errors)
+                  if errors and reports:
+                      last=reports[-1]
+                      reports[-1]=(*last[:4],last[4]+errors)
                   health[source_id(company,source_type,url)]='PARTIAL'
               else:
                   health[source_id(company,source_type,url)]=source_status(len(pages),len(cards),errors,bool(queue) or limited)
@@ -871,6 +877,8 @@ jobs:
               stats['retries']+=retry_stats['retries']
               stats['latest_health']=health
               stats['page_cache_hits']=get_page.cache_info().hits
+              stats['elapsed_seconds']=round(time.monotonic()-scan_started)
+              stats['outcomes']={status:sum(v==status for v in outcomes.values()) for status in ('POSSIBLE_MATCH','UNKNOWN','REVIEW_3_PLUS','CLOSED')}
               stats['avito']=read_avito_diagnostics()
               stats['linkedin']=history.get('linkedin_diagnostics',{})
               if now.hour>=20 and history.get('daily_report_sent')!=day:
