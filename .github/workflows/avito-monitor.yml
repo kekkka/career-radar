@@ -155,6 +155,7 @@ jobs:
               r"|\bproduct\s+marketing\s+manager\b"
           )
 
+          
           def classify(title, category):
               text = normalize(title)
 
@@ -164,19 +165,67 @@ jobs:
               if re.search(excluded_pattern, text):
                   return None
 
-              for pattern in pm_patterns:
-                  if re.search(pattern, text):
-                      return "Product Management"
+              excluded_roles = [
+                  r"\bdata analyst\b",
+                  r"\bаналитик\w*\s+данных\b",
+                  r"\bразработчик\w*\b",
+                  r"\bdeveloper\b",
+                  r"\bengineer\b",
+                  r"\bинженер\w*\b",
+                  r"\bbi\b",
+                  r"\bdata scientist\b",
+                  r"\bproject manager\b",
+                  r"\bменеджер\w*\s+проект",
+                  r"\bменеджер\w*\s+по\s+управлению\s+проект",
+                  r"\bсистемн\w*\s+аналитик",
+                  r"\bбизнес\s+аналитик",
+                  r"\bмаркетингов\w*\s+аналитик",
+                  r"\bфинансов\w*\s+аналитик",
+                  r"\bproduct marketing\b",
+                  r"\bproduct designer\b",
+                  r"\bдизайнер\w*\b"
+              ]
 
-              for pattern in analyst_patterns:
+              for pattern in excluded_roles:
+                  if re.search(pattern, text):
+                      return None
+
+              strict_analyst_patterns = [
+                  r"\bproduct analyst\b",
+                  r"\bproduct analytics\b",
+                  r"\bпродуктов\w*\s+аналитик\w*\b",
+                  r"\bаналитик\w*\s+продукт\w*\b",
+                  r"\bпродакт\s+аналитик\w*\b",
+                  r"\bаналитик\w*\s+продуктов\w*\s+команд"
+              ]
+
+              for pattern in strict_analyst_patterns:
                   if re.search(pattern, text):
                       return "Product Analytics"
 
-              if category == "upravlenie-produktom":
-                  return "Возможная продуктовая позиция"
+              strict_pm_patterns = [
+                  r"\bproduct manager\b",
+                  r"\bproduct owner\b",
+                  r"\bproduct intern\b",
+                  r"\bproduct assistant\b",
+                  r"\bпродакт\b",
+                  r"\bпродакт\s+менеджер",
+                  r"\bпродукт\w*\s+менеджер",
+                  r"\bменеджер\w*\s+продукт",
+                  r"\bменеджер\w*\s+по\s+продукт",
+                  r"\bменеджер\w*\s+по\s+развитию\s+продукт",
+                  r"\bменеджер\w*\s+продуктов\w*\s+направлен",
+                  r"\bвладелец\s+продукт",
+                  r"\bapm\b"
+              ]
 
-              if category == "analitika-dannykh":
-                  return "Возможная аналитическая позиция"
+              for pattern in strict_pm_patterns:
+                  if re.search(pattern, text):
+                      return "Product Management"
+
+              if category == "upravlenie-produktom":
+                  if re.search(r"\b(pm|po|tpm)\b", text):
+                      return "Product Management"
 
               return None
 
