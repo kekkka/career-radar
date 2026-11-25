@@ -122,6 +122,33 @@ jobs:
               }
           }
 
+          
+          # Updated sources after diagnostics
+
+          COMPANIES["ВкусВилл"]["career"] = [
+              "https://vkusvill.ru/job/office/"
+          ]
+
+          COMPANIES["START"]["career"] = [
+              "https://start.career/career",
+              "https://start.career/tech"
+          ]
+
+          COMPANIES["Wink"]["career"] = [
+              "https://job.rt.ru/dzo",
+              "https://job.rt.ru/search"
+          ]
+
+          COMPANIES["Skyeng"]["referral"] = [
+              "https://referral-programs.skyeng.ru/"
+          ]
+
+          COMPANIES["Wink"]["telegram"] = [
+              "https://t.me/Rostelecom_career"
+          ]
+
+
+          
           SOURCE_TYPES = [
               "career",
               "internal",
@@ -268,7 +295,7 @@ jobs:
                   print("TOTAL LINKS:", len(parser.links))
                   print("CANDIDATE LINKS:", len(found))
 
-                  for link, title in sorted(found)[:25]:
+                  for link, title in sorted(found):
                       print("LINK:", title, "|", link)
 
                   print("RELEVANT TEXT:")
