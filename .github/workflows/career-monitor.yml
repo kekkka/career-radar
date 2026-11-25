@@ -628,8 +628,11 @@ jobs:
                           text=msg.get('text','')
                           command=text.split(maxsplit=1)[0].split('@',1)[0].lower() if text.strip() else ''
                           if command in ('/start','/help','/status'):
-                              from radar_commands import command_reply
-                              telegram_api('sendMessage',{'chat_id':chat,'text':command_reply(command,history)})
+                              from radar_commands import command_reply, command_keyboard
+                              if command=='/start': history['manual_scan_requested']=True; save_history()
+                              avito_file=Path('data/avito_history.json')
+                              avito_diag=json.loads(avito_file.read_text()).get('diagnostics',{}) if avito_file.exists() else {}
+                              telegram_api('sendMessage',{'chat_id':chat,'text':command_reply(command,history,avito_diag),'reply_markup':command_keyboard()})
                           elif text.startswith('/vacancy'):
                               job=parse_submission(text)
                               if job:
@@ -835,7 +838,18 @@ jobs:
               print('LINKEDIN PAUSED: no records processed')
               raise SystemExit(0)
           if not linkedin_only: receive_submissions()
-          if os.getenv('COMMANDS_ONLY','').lower()=='true':
+          manual_scan=send_enabled and bool(history.get('manual_scan_requested'))
+          if manual_scan:
+              # Same serialized job, no additional GitHub token or competing history writer.
+              import textwrap
+              avito_path=Path('.github/workflows/avito-monitor.yml')
+              src=avito_path.read_text().split("python3 -u - <<'PY'\n",1)[1].split('\n          PY',1)[0]
+              try:
+                  exec(compile(textwrap.dedent(src),str(avito_path),'exec'),{'__name__':'__main__'})
+              except (Exception,SystemExit) as e:
+                  print('MANUAL AVITO SCAN FAILED:',type(e).__name__)
+                  send_errors+=1
+          if os.getenv('COMMANDS_ONLY','').lower()=='true' and not manual_scan:
               print('COMMAND POLL COMPLETED; no site scan')
               if send_errors: raise SystemExit(1)
               raise SystemExit(0)
@@ -899,8 +913,16 @@ jobs:
               stats['elapsed_seconds']=round(time.monotonic()-scan_started)
               stats['outcomes']={status:sum(v==status for v in outcomes.values()) for status in ('POSSIBLE_MATCH','UNKNOWN','REVIEW_3_PLUS','CLOSED')}
               stats['avito']=read_avito_diagnostics()
+              if manual_scan:
+                  from radar_commands import command_reply, command_keyboard
+                  history.pop('manual_scan_requested',None)
+                  save_history()
+                  try:
+                      telegram_api('sendMessage',{'chat_id':os.environ['TELEGRAM_CHAT_ID'],'text':('Внеплановый поиск завершён. Есть ошибки проверки.\n\n' if send_errors else 'Внеплановый поиск завершён.\n\n')+command_reply('/status',history,stats['avito']),'reply_markup':command_keyboard()})
+                  except Exception as e:
+                      send_errors+=1; print('MANUAL REPORT ERROR:',type(e).__name__)
 
-              if now.hour>=20 and history.get('daily_report_sent')!=day:
+              if now.hour>=20 and history.get('daily_report_sent')!=day and not manual_scan:
                   try:
                       telegram_api('sendMessage',{'chat_id':os.environ['TELEGRAM_CHAT_ID'],'text':daily_message(stats)})
                       history['daily_report_sent']=day
@@ -917,7 +939,7 @@ jobs:
           if [ ! -f data/career_history.json ]; then exit 0; fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add data/career_history.json
+          git add data/career_history.json data/avito_history.json
           if git diff --cached --quiet; then exit 0; fi
           git commit -m 'Update public career vacancy history'
           for attempt in 1 2 3; do
