@@ -36,4 +36,10 @@ class QualityTests(unittest.TestCase):
         self.assertEqual(source_status(2,1,0,True),'PARTIAL')
         self.assertEqual(source_status(1,3,0),'CARDS_FOUND')
     def test_report(self):
-        self.assertIn('Без карточек (не подтверждено): 1',daily_message({'day':'2026-11-25','runs':1,'sent':0,'duplicates':0,'retries':0,'latest_health':{'X':'NO_CARDS_UNVERIFIED'}}))
+        report=daily_message({'day':'2026-11-25','runs':1,'sent':1,'duplicates':0,'retries':0,'latest_health':{'X | a':'NO_CARDS_UNVERIFIED','X | b':'ERROR','Y | a':'CARDS_FOUND','Y | b':'ERROR','Z | a':'CARDS_FOUND'}})
+        self.assertIn('Не удалось подтвердить покрытие: X',report)
+        self.assertIn('Частичная проверка: Y',report)
+        self.assertIn('Карточки получены: Z',report)
+        self.assertIn('Новых вакансий: 1',report)
+        self.assertNotIn('LinkedIn',report)
+        self.assertNotIn('NO_CARDS_UNVERIFIED',report)

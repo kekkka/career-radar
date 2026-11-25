@@ -61,31 +61,31 @@ def source_status(pages,cards,errors,partial=False):
 
 def daily_message(stats):
     health=stats.get('latest_health',{})
-    counts={k:sum(v==k for v in health.values()) for k in ('CARDS_FOUND','PARTIAL','ERROR','NO_CARDS_UNVERIFIED')}
-    lines=['📊 Career Radar — диагностика за '+stats['day'],
-           'Солнышко, вот отчёт по общему мониторингу 💗',
-           'Завершённых проходов: '+str(stats['runs']),
-           'Отправлено вакансий: '+str(stats['sent']),
-           'Исключено повторов: '+str(stats['duplicates']),
-           'Сетевых повторов: '+str(stats['retries']),
-           'Последний проход: '+str(len(health))+' источников',
-           'Карточки найдены: '+str(counts['CARDS_FOUND']),
-           'Частично: '+str(counts['PARTIAL']),
-           'Ошибки: '+str(counts['ERROR']),
-           'Без карточек (не подтверждено): '+str(counts['NO_CARDS_UNVERIFIED']),
-           'Кеш: '+str(stats.get('page_cache_hits',0))]
-    for key,status in sorted(health.items()):
-        if status!='CARDS_FOUND': lines.append(key.split(' | ')[0]+': '+status)
+    groups={}
+    for key,status in health.items():
+        company=key.split(' | ')[0]
+        groups.setdefault(company,[]).append(status)
+    available=[]; limited=[]; unavailable=[]
+    for company,statuses in sorted(groups.items()):
+        if all(s=='CARDS_FOUND' for s in statuses): available.append(company)
+        elif 'CARDS_FOUND' in statuses or 'PARTIAL' in statuses: limited.append(company)
+        else: unavailable.append(company)
+    lines=['💗 Career Radar — итоги '+stats['day'],
+           'Солнышко, вот результаты поиска!',
+           '',
+           'Новых вакансий: '+str(stats['sent']),
+           'Повторов исключено: '+str(stats['duplicates']),
+           'Проходов за день: '+str(stats['runs'])]
+    outcomes=stats.get('outcomes',{})
+    if outcomes:
+        lines.extend(['Последний проход: стаж выше лимита — '+str(outcomes.get('REVIEW_3_PLUS',0))+'; не подтверждены требования или актуальность — '+str(outcomes.get('UNKNOWN',0))])
     avito=stats.get('avito',{})
-    linkedin=stats.get('linkedin',{})
-    lines.append('Авито — последний запуск:')
     if avito:
-        lines.append(str(avito.get('at','?'))+' | '+str(avito.get('status','UNKNOWN')))
-        lines.append('Карточки: '+str(avito.get('cards',0))+'; отправлено: '+str(avito.get('sent',0))+'; закрыто: '+str(avito.get('closed',0))+'; ошибки: '+str(avito.get('errors',0))+'; секунд: '+str(avito.get('elapsed_seconds',0)))
-    else: lines.append('Нет подтверждённых данных')
-    lines.append('LinkedIn — последний запуск приёмника:')
-    if linkedin:
-        lines.append(str(linkedin.get('at','?'))+'; принято: '+str(linkedin.get('records',0))+'; отправлено: '+str(linkedin.get('sent',0))+'; ошибки: '+str(linkedin.get('errors',0)))
-    else: lines.append('Нет подтверждённых данных')
-    lines.append('Gmail: чтение писем и парсинг не подтверждаются статистикой приёмника.')
+        lines.extend(['','Авито: '+str(avito.get('cards',0))+' карточек, отправлено '+str(avito.get('sent',0))+' (последний проход).'])
+        if avito.get('errors'): lines.append('Проверка Авито частичная.')
+    lines.extend(['','Покрытие остальных работодателей:'])
+    if available: lines.append('✅ Карточки получены: '+', '.join(available))
+    if limited: lines.append('⚠️ Частичная проверка: '+', '.join(limited))
+    if unavailable: lines.append('⚠️ Не удалось подтвердить покрытие: '+', '.join(unavailable))
+    lines.append('Отсутствие карточек не означает отсутствие вакансий.')
     return '\n'.join(lines)[:3900]
