@@ -30,7 +30,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Offline quality tests
         run: python3 -m unittest discover -s tests -v
-      - name: Check career sources V1.0
+      - name: Check career sources V1.2
         env:
           PYTHONUNBUFFERED: "1"
           LINKEDIN_RECORDS: ${{ inputs.linkedin_records }}
@@ -188,6 +188,11 @@ jobs:
           COMPANIES["Точка"]["career"].append("https://hr.tochka.com/vacancies/")
           COMPANIES["Т-Банк"]["career"].append("https://www.tbank.ru/career/it/product-analytics/")
 
+          # Additional public listing pages; live accessibility is not assumed.
+          COMPANIES["Самокат"]["career"].extend(["https://samokat.tech/vacancies","https://samokat.tech/internships"])
+          COMPANIES["Dodo Brands"]["career"].extend(["https://career.habr.com/companies/dododev","https://career.habr.com/companies/dodobrands"])
+          COMPANIES["Skyeng"]["career"].extend(["https://job.skyeng.ru/vacancies-dev","https://vacancies.skyeng.ru/?ch=site","https://career.habr.com/companies/skyeng"])
+
           # Public source registry: discovery is not proof of permission or coverage.
           # No LinkedIn scraping; use official email alerts or explicitly submitted vacancies.
           CHANNELS = {
@@ -293,6 +298,10 @@ jobs:
                       path
                   ))
 
+              if host == "career.habr.com":
+                  return bool(re.fullmatch(r"/vacancies/\d+",path))
+              if host == "vacancies.skyeng.ru":
+                  return bool(re.fullmatch(r"/vacancies/[^/]+",path))
               if host == "cian.huntflow.io":
                   return bool(re.fullmatch(r"/vacancy/[^/]+", path))
               if host == "hr.tochka.com":
@@ -392,6 +401,9 @@ jobs:
               rp = robot_cache[root]
               return rp is not None and rp.can_fetch(AGENT, url)
 
+          from radar_lifecycle import is_closed, vacancy_key, belongs_to_habr
+          from functools import lru_cache
+          @lru_cache(maxsize=32)
           def get_page(url):
               for _ in range(5):
                   if not allowed(url):
@@ -417,8 +429,7 @@ jobs:
               raise RuntimeError("Too many redirects")
 
           def canonical(url):
-              p = urlparse(url)
-              return urlunparse((p.scheme,p.netloc.lower(),p.path.rstrip('/'), '', '', ''))
+              return vacancy_key(url)
 
           def job_objects(body):
               def walk(obj):
@@ -615,7 +626,7 @@ jobs:
 
           def inspect_source(company, source_type, url):
               print('\nCOMPANY:',company,'SOURCE:',source_type,'URL:',url)
-              queue=deque([url]); pages=set(); cards=set(); matches=0; errors=0; details=0
+              queue=deque([url]); pages=set(); cards=set(); matches=0; errors=0; details=0; limited=False
               while queue and len(pages)<MAX_PAGES:
                   current=queue.popleft()
                   if current in pages: continue
@@ -632,16 +643,18 @@ jobs:
                       if is_vacancy(full): candidates.append((full,title))
                       if p.netloc==f.netloc and p.path.rstrip('/')==f.path.rstrip('/') and any(re.fullmatch(r'(?:page|pagen_\d+|p|offset)',k,re.I) for k in parse_qs(p.query)) and full not in pages:
                           queue.append(full)
-                      if KEYWORDS.search(full+' '+title): print('LINK:',title[:160],'|',full)
+                      # Avoid printing every navigation link.
                   for obj in job_objects(body):
                       link=urljoin(final,str(obj.get('url') or final)); title=str(obj.get('title') or '')
                       if urlparse(link).netloc==urlparse(final).netloc and title: candidates.append((link,title))
                   for link,title in candidates:
-                      key=canonical(link); cards.add(key)
+                      key=(company,canonical(link)); cards.add(key[1])
                       role=classify(title)
                       if not role or key in seen_jobs: continue
+                      if source_type=='career' and identity_keys(company,link).intersection(sent):
+                          continue
                       if details>=MAX_DETAILS:
-                          print('DETAIL LIMIT:',link); continue
+                          limited=True; print('DETAIL LIMIT:',link); continue
                       if company=='Кинопоиск' and not re.search(r'кинопоиск|kinopoisk',title+' '+link,re.I):
                           print('SERVICE UNVERIFIED:',link); continue
                       if company=='Самокат' and urlparse(link).hostname in ('ecom.tech','samokat.tech') and not re.search(r'самокат|samokat',title+' '+link,re.I):
@@ -652,6 +665,11 @@ jobs:
                       try:
                           _,detail,dp=get_page(link)
                           objects=list(job_objects(detail)); txt=' '.join(dp.text)
+                          if urlparse(link).hostname=='career.habr.com' and not belongs_to_habr(objects,COMPANIES[company]['aliases']):
+                              limited=True; print('EMPLOYER UNVERIFIED:',link); continue
+                          if is_closed(txt,objects):
+                              outcomes[key]='CLOSED'; seen_jobs.add(key)
+                              print('CLOSED VACANCY:',link); continue
                           if objects:
                               obj=objects[0]; actual_title=str(obj.get('title') or '').strip();
                               if actual_title:
@@ -667,6 +685,7 @@ jobs:
                               desc_text=txt
                           state,evidence=experience(desc_text)
                       except Exception as e:
+                          errors+=1
                           state,evidence='UNKNOWN',type(e).__name__
                       seen_jobs.add(key); matches+=1
                       outcomes[key]=state
@@ -678,7 +697,7 @@ jobs:
                           pending.append((company, role, title, link, state, evidence, ranking))
               if queue: print('PAGE LIMIT: coverage partial')
               print('SOURCE RESULT:',company,source_type,'pages',len(pages),'cards',len(cards),'new matches',matches,'errors',errors)
-              health[source_id(company,source_type,url)]=source_status(len(pages),len(cards),errors,bool(queue))
+              health[source_id(company,source_type,url)]=source_status(len(pages),len(cards),errors,bool(queue) or limited)
               reports.append((company,source_type,len(cards),matches,errors))
 
           assert classify('Junior Product Manager')=='Product Manager'
@@ -758,7 +777,7 @@ jobs:
           print('FINAL REPORT')
           for item in reports: print(*item,sep=' | ')
           print('UNIQUE PRODUCT MATCHES:',len(outcomes))
-          for status in ('POSSIBLE_MATCH','UNKNOWN','REVIEW_3_PLUS'):
+          for status in ('POSSIBLE_MATCH','UNKNOWN','REVIEW_3_PLUS','CLOSED'):
               print(status, sum(v==status for v in outcomes.values()))
           print('NOTIFICATIONS SENT:', notifications)
           for company in COMPANIES:
@@ -769,6 +788,14 @@ jobs:
           print('INTERNAL: authorized submission only; private portal coverage not established')
           print('NOTIFICATION ERRORS:', send_errors)
 
+          if send_enabled and linkedin_only:
+              history['linkedin_diagnostics']={'at':datetime.now(timezone.utc).isoformat(),'records':len(records),'sent':notifications,'errors':send_errors}
+              save_history()
+          def read_avito_diagnostics():
+              try:
+                  return json.loads(Path('data/avito_history.json').read_text()).get('diagnostics',{})
+              except (OSError,ValueError):
+                  return {}
           # Daily report uses completed scans, not inferred coverage. No private vacancy text.
           if send_enabled and not linkedin_only:
               now=datetime.now(ZoneInfo('Europe/Riga'))
@@ -782,6 +809,9 @@ jobs:
               stats['duplicates']+=duplicates
               stats['retries']+=retry_stats['retries']
               stats['latest_health']=health
+              stats['page_cache_hits']=get_page.cache_info().hits
+              stats['avito']=read_avito_diagnostics()
+              stats['linkedin']=history.get('linkedin_diagnostics',{})
               if now.hour>=20 and history.get('daily_report_sent')!=day:
                   try:
                       telegram_api('sendMessage',{'chat_id':os.environ['TELEGRAM_CHAT_ID'],'text':daily_message(stats)})
@@ -789,6 +819,7 @@ jobs:
                   except Exception as e:
                       send_errors+=1; print('DAILY REPORT ERROR:',type(e).__name__)
               save_history()
+          print('PAGE CACHE HITS:',get_page.cache_info().hits)
           print('DIAGNOSTICS COMPLETED')
           if send_errors: raise SystemExit(1)
           PY
