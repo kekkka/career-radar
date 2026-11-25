@@ -20,6 +20,8 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+      - name: Offline quality tests
+        run: python3 -m unittest discover -s tests -v
       - name: Check career sources V1.0
         env:
           PYTHONUNBUFFERED: "1"
@@ -349,10 +351,14 @@ jobs:
                   return None
           opener = urllib.request.build_opener(NoRedirect())
 
+          from radar_quality import retry_fetch, identity_keys, source_status, daily_message
+          retry_stats={'retries':0}
           def raw(url):
-              req = urllib.request.Request(url, headers={"User-Agent": AGENT})
-              with opener.open(req, timeout=20) as response:
-                  return response.read(8*1024*1024).decode("utf-8", errors="replace")
+              def request():
+                  req=urllib.request.Request(url,headers={"User-Agent":AGENT})
+                  with opener.open(req,timeout=20) as response:
+                      return response.read(8*1024*1024).decode("utf-8",errors="replace")
+              return retry_fetch(request,retry_stats)
 
           def allowed(url):
               p = urlparse(url)
@@ -476,6 +482,7 @@ jobs:
           send_enabled = os.getenv('SEND_NOTIFICATIONS', '').lower() == 'true'
           history = json.loads(history_path.read_text()) if history_path.exists() else {'sent': []}
           sent = set(history['sent'])
+          duplicates = 0
           notifications = 0
           send_errors = 0
           def format_notification(company, role, title, state, evidence, ranking, source='career'):
@@ -512,17 +519,23 @@ jobs:
               history_path.write_text(json.dumps(history,indent=2)+'\n')
 
           def notify(company, role, title, link, state, evidence, ranking, source='career'):
-              global notifications, send_errors
+              global notifications, send_errors, duplicates
               private = source != 'career'
               if state != 'POSSIBLE_MATCH':
                   print('HELD FOR EXPERIENCE REVIEW:',state, '' if private else link)
                   return True
               key=hashlib.sha256(canonical(link).encode()).hexdigest() if not private else hashlib.sha256(('submitted:'+company+':'+link+':'+title).encode()).hexdigest()
-              if key in sent: return True
+          keys=identity_keys(company,link)
+              avito_path=Path('data/avito_history.json')
+              avito_sent=set(json.loads(avito_path.read_text()).get('sent',[])) if avito_path.exists() else set()
+              if key in sent or keys.intersection(sent) or any(k.startswith('avito:') and k[6:] in avito_sent for k in keys):
+                  duplicates+=1
+                  return True
+
               if not send_enabled: return False
               try:
                   telegram_api('sendMessage', {'chat_id':os.environ['TELEGRAM_CHAT_ID'],'text':format_notification(company,role,title,state,evidence,ranking,source),'parse_mode':'HTML','disable_web_page_preview':True,'reply_markup':{'inline_keyboard':[[{'text':'Открыть источник вакансии' if private else 'Открыть вакансию','url':link}]]}})
-                  sent.add(key); save_history(); notifications+=1
+                  sent.update(keys); sent.add(key); save_history(); notifications+=1
                   print('SENT:',source if private else link)
                   time.sleep(1)
                   return True
@@ -607,6 +620,11 @@ jobs:
               except Exception as e:
                   print('SUBMISSION ERROR:',type(e).__name__)
 
+          from datetime import datetime, timezone
+          from zoneinfo import ZoneInfo
+          def source_id(company,kind,url):
+              return company+' | '+kind+' | '+hashlib.sha256(url.encode()).hexdigest()[:12]
+          health={}
           seen_jobs=set(); outcomes={}; reports=[]; pending=[]
           MAX_PAGES=5
           MAX_DETAILS=30
@@ -676,6 +694,7 @@ jobs:
                           pending.append((company, role, title, link, state, evidence, ranking))
               if queue: print('PAGE LIMIT: coverage partial')
               print('SOURCE RESULT:',company,source_type,'pages',len(pages),'cards',len(cards),'new matches',matches,'errors',errors)
+              health[source_id(company,source_type,url)]=source_status(len(pages),len(cards),errors,bool(queue))
               reports.append((company,source_type,len(cards),matches,errors))
 
           assert classify('Junior Product Manager')=='Product Manager'
@@ -738,6 +757,7 @@ jobs:
                       except Exception as e:
                           print('UNEXPECTED SOURCE ERROR:',company,type(e).__name__)
                           reports.append((company,source_type,0,0,1))
+                          health[source_id(company,source_type,url)]='ERROR'
           for job in sorted(pending, key=lambda job: job[-1][0], reverse=True):
               notify(*job)
           print('PRIORITY HIGH:',sum(job[-1][0]==2 for job in pending))
@@ -756,6 +776,26 @@ jobs:
           print('INTERNAL: authorized submission only; private portal coverage not established')
           print('NOTIFICATION ERRORS:', send_errors)
 
+          # Daily report uses completed scans, not inferred coverage. No private vacancy text.
+          if send_enabled:
+              now=datetime.now(ZoneInfo('Europe/Riga'))
+              day=now.date().isoformat()
+              stats=history.setdefault('diagnostics',{})
+              if stats.get('day')!=day:
+                  stats={'day':day,'runs':0,'sent':0,'duplicates':0,'retries':0}
+                  history['diagnostics']=stats
+              stats['runs']+=1
+              stats['sent']+=notifications
+              stats['duplicates']+=duplicates
+              stats['retries']+=retry_stats['retries']
+              stats['latest_health']=health
+              if now.hour>=20 and history.get('daily_report_sent')!=day:
+                  try:
+                      telegram_api('sendMessage',{'chat_id':os.environ['TELEGRAM_CHAT_ID'],'text':daily_message(stats)})
+                      history['daily_report_sent']=day
+                  except Exception as e:
+                      send_errors+=1; print('DAILY REPORT ERROR:',type(e).__name__)
+              save_history()
           print('DIAGNOSTICS COMPLETED')
           if send_errors: raise SystemExit(1)
           PY
