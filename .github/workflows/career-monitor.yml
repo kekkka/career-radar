@@ -618,7 +618,11 @@ jobs:
                       msg=update.get('message',{}); c=msg.get('chat',{})
                       if c.get('type')=='private' and str(c.get('id'))==chat and str(msg.get('from',{}).get('id'))==chat:
                           text=msg.get('text','')
-                          if text.startswith('/vacancy'):
+                          command=text.split(maxsplit=1)[0].split('@',1)[0].lower() if text.strip() else ''
+                          if command in ('/start','/help','/status'):
+                              from radar_commands import command_reply
+                              telegram_api('sendMessage',{'chat_id':chat,'text':command_reply(command,history)})
+                          elif text.startswith('/vacancy'):
                               job=parse_submission(text)
                               if job:
                                   if not notify(*job): break
