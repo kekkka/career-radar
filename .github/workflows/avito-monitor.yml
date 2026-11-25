@@ -1,0 +1,356 @@
+
+name: Avito Career Monitor
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: avito-monitor
+  cancel-in-progress: false
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Find and send Avito vacancies
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import re
+          import json
+          import time
+          import unicodedata
+          import urllib.request
+          import urllib.error
+          import urllib.robotparser
+
+          from html.parser import HTMLParser
+          from urllib.parse import urljoin, urlparse
+
+          BASE = "https://career.avito.com"
+          AGENT = "CareerRadar"
+
+          robots = urllib.robotparser.RobotFileParser()
+          robots.set_url(BASE + "/robots.txt")
+          robots.read()
+
+          class Parser(HTMLParser):
+              def __init__(self):
+                  super().__init__()
+                  self.links = set()
+                  self.title = ""
+                  self.text = []
+                  self.in_title = False
+                  self.skip = 0
+
+              def handle_starttag(self, tag, attrs):
+                  if tag == "title":
+                      self.in_title = True
+                  if tag in ("script", "style"):
+                      self.skip += 1
+                  if tag == "a":
+                      href = dict(attrs).get("href")
+                      if href:
+                          self.links.add(href)
+
+              def handle_endtag(self, tag):
+                  if tag == "title":
+                      self.in_title = False
+                  if tag in ("script", "style"):
+                      self.skip = max(0, self.skip - 1)
+
+              def handle_data(self, data):
+                  if self.in_title:
+                      self.title += data
+                  if not self.skip and data.strip():
+                      self.text.append(data.strip())
+
+          def fetch(url):
+              if not robots.can_fetch(AGENT, url):
+                  raise RuntimeError("Restricted by robots.txt")
+
+              time.sleep(3)
+
+              request = urllib.request.Request(
+                  url,
+                  headers={"User-Agent": AGENT}
+              )
+
+              with urllib.request.urlopen(
+                  request, timeout=30
+              ) as response:
+                  parser = Parser()
+                  parser.feed(response.read().decode(
+                      "utf-8", errors="replace"
+                  ))
+
+              return parser
+
+          def normalize(text):
+              text = unicodedata.normalize("NFKC", text)
+              text = text.lower().replace("ё", "е")
+              return re.sub(r"[\W_]+", " ", text).strip()
+
+          pm_patterns = [
+              r"\bproduct\s+(?:\w+\s+){0,2}manager\b",
+              r"\bproduct\s+owner\b",
+              r"\bproduct\s+intern\b",
+              r"\bproduct\s+assistant\b",
+              r"\bproduct\s+lead\b",
+              r"\bпродакт\w*\b",
+              r"\bпродукт\w*\s+менеджер\w*\b",
+              r"\bменеджер\w*\s+продукт\w*\b",
+              r"\bменеджер\w*\s+по\s+продукт\w*\b",
+              r"\bменеджер\w*\s+по\s+развитию\s+продукт",
+              r"\bменеджер\w*\s+продуктов\w+\s+направлен",
+              r"\bвладелец\s+продукт",
+              r"\bапм\b",
+              r"\bapm\b",
+              r"\bpm\b",
+              r"\btpm\b",
+              r"\bpo\b"
+          ]
+
+          analyst_patterns = [
+              r"\bproduct\s+(?:data\s+)?analyst\b",
+              r"\bproduct\s+analytics\b",
+              r"\bgrowth\s+analyst\b",
+              r"\bdata\s+analyst\b",
+              r"\bexperimentation\s+analyst\b",
+              r"\bпродуктов\w*\s+аналитик\w*\b",
+              r"\bаналитик\w*\s+продукт\w*\b",
+              r"\bаналитик\w*\s+данных\b",
+              r"\bаналитик\w*\s+роста\b",
+              r"\bаналитик\w*\s+монетизац",
+              r"\bаналитик\w*\s+рекомендац",
+              r"\bаналитик\w*\s+поиска\b",
+              r"\bаналитик\w*\s+сервис",
+              r"\banalyst\b",
+              r"\bаналитик\w*\b"
+          ]
+
+          senior_pattern = (
+              r"^(?:senior|lead|principal|staff|"
+              r"head|ведущий|старший|"
+              r"руководитель|директор)\b"
+              r"|\b(?:senior|principal|lead)\s+"
+              r"(?:product|data|analyst|pm)\b"
+              r"|\b(?:product manager|product analyst)"
+              r"\s+(?:senior|lead)\b"
+          )
+
+          excluded_pattern = (
+              r"\b(?:системн\w*|бизнес|финансов\w*|"
+              r"маркетингов\w*)\s+аналитик\w*\b"
+              r"|\b(?:system|business|financial|"
+              r"marketing|bi)\s+analyst\b"
+              r"|\bproduct\s+marketing\s+manager\b"
+          )
+
+          def classify(title, category):
+              text = normalize(title)
+
+              if re.search(senior_pattern, text):
+                  return None
+
+              if re.search(excluded_pattern, text):
+                  return None
+
+              for pattern in pm_patterns:
+                  if re.search(pattern, text):
+                      return "Product Management"
+
+              for pattern in analyst_patterns:
+                  if re.search(pattern, text):
+                      return "Product Analytics"
+
+              if category == "upravlenie-produktom":
+                  return "Возможная продуктовая позиция"
+
+              if category == "analitika-dannykh":
+                  return "Возможная аналитическая позиция"
+
+              return None
+
+          def send_message(text):
+              token = os.environ["TELEGRAM_BOT_TOKEN"]
+              chat_id = os.environ["TELEGRAM_CHAT_ID"]
+
+              payload = json.dumps({
+                  "chat_id": chat_id,
+                  "text": text,
+                  "disable_web_page_preview": True
+              }).encode("utf-8")
+
+              request = urllib.request.Request(
+                  f"https://api.telegram.org/bot{token}/sendMessage",
+                  data=payload,
+                  headers={
+                      "Content-Type": "application/json"
+                  }
+              )
+
+              try:
+                  with urllib.request.urlopen(
+                      request, timeout=30
+                  ) as response:
+                      result = json.load(response)
+
+                  if not result.get("ok"):
+                      raise RuntimeError(
+                          "Telegram rejected message"
+                      )
+
+              except urllib.error.HTTPError as error:
+                  raise RuntimeError(
+                      f"Telegram error: {error.code}"
+                  ) from None
+
+              except urllib.error.URLError:
+                  raise RuntimeError(
+                      "Telegram connection failed"
+                  ) from None
+
+              time.sleep(2)
+
+          def collect_links(parser, source):
+              result = set()
+
+              for href in parser.links:
+                  url = urljoin(source, href)
+                  parsed = urlparse(url)
+
+                  if parsed.hostname == "career.avito.com":
+                      result.add(
+                          BASE + parsed.path.rstrip("/") + "/"
+                      )
+
+              return result
+
+          vacancy_pattern = re.compile(
+              r"/(?:publications|vacancies)/[^/]+/"
+              r"(?:\d+|[a-fA-F0-9-]{36})/?"
+          )
+
+          catalog = BASE + "/publications/"
+          links = collect_links(fetch(catalog), catalog)
+
+          categories = {
+              link for link in links
+              if re.fullmatch(
+                  r"/publications/[^/]+/",
+                  urlparse(link).path
+              )
+          }
+
+          vacancies = {
+              link for link in links
+              if vacancy_pattern.fullmatch(
+                  urlparse(link).path
+              )
+          }
+
+          for category in sorted(categories):
+              found = collect_links(
+                  fetch(category), category
+              )
+
+              vacancies.update({
+                  link for link in found
+                  if vacancy_pattern.fullmatch(
+                      urlparse(link).path
+                  )
+              })
+
+          print("Vacancies discovered:", len(vacancies))
+
+          if not vacancies:
+              raise SystemExit("No vacancies found")
+
+          matched = []
+          failures = 0
+
+          for url in sorted(vacancies):
+              try:
+                  page = fetch(url)
+                  title = page.title.strip()
+
+                  if not title:
+                      failures += 1
+                      continue
+
+                  category = urlparse(url).path.split("/")[2]
+                  role = classify(title, category)
+
+                  if not role:
+                      continue
+
+                  text = normalize(" ".join(page.text))
+
+                  internal = bool(re.search(
+                      r"войдите как сотрудник|"
+                      r"только для сотрудников|"
+                      r"внутренняя вакансия",
+                      text
+                  ))
+
+                  matched.append({
+                      "title": title,
+                      "role": role,
+                      "url": url,
+                      "internal": internal
+                  })
+
+                  print("MATCH:", title)
+
+              except Exception as error:
+                  failures += 1
+                  print("Read failed:", url, type(error).__name__)
+
+          print("Potential matches:", len(matched))
+          print("Read failures:", failures)
+
+          send_message(
+              "Привет, солнышко! 💗\n\n"
+              "Я проверил карьерный сайт Авито.\n\n"
+              f"Просмотрено ссылок: {len(vacancies)}\n"
+              f"Потенциально подходящих: {len(matched)}\n"
+              f"Ошибок чтения: {failures}\n\n"
+              "Пока требования к стажу нужно "
+              "уточнять самостоятельно. 👀"
+          )
+
+          for job in matched:
+              access = (
+                  "🔒 Возможно внутренняя вакансия. "
+                  "Требуется уточнить способ отклика."
+                  if job["internal"]
+                  else "Способ отклика необходимо уточнить."
+              )
+
+              message = (
+                  "Смотри, что я тебе нашел! 🐱\n\n"
+                  f"💼 {job['title']}\n\n"
+                  "🏢 Компания: Авито\n"
+                  f"📊 Направление: {job['role']}\n"
+                  "⚠️ Требуемый опыт: уточнить\n\n"
+                  f"{access}\n\n"
+                  f"🔗 {job['url']}\n\n"
+                  "У тебя все получится! 💗"
+              )
+
+              send_message(message)
+
+          print("MONITOR COMPLETED")
+
+          if failures:
+              raise SystemExit("Some vacancies could not be read")
+          PY
