@@ -50,5 +50,11 @@
       "Wink | career | 0f18c43dbf95": "NO_CARDS_UNVERIFIED",
       "Wink | career | ef084b11a41a": "NO_CARDS_UNVERIFIED"
     }
+  },
+  "linkedin_diagnostics": {
+    "at": "2026-11-25T18:31:34.112445+00:00",
+    "records": 0,
+    "sent": 0,
+    "errors": 0
   }
 }
