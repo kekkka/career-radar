@@ -258,33 +258,7 @@ jobs:
                   try: yield from walk(json.loads(m.group(1)))
                   except (ValueError,TypeError): continue
 
-          def experience(text):
-              text = re.sub(r'\s+', ' ', text.lower().replace('ё','е'))
-              vals = {'один':1,'одного':1,'одной':1,'два':2,'двух':2,'три':3,'трех':3,'четыре':4,'четырех':4,'пять':5,'пяти':5,'шесть':6,'шести':6,'семь':7,'семи':7,'one':1,'two':2,'three':3,'four':4,'five':5,'six':6,'seven':7}
-              num = r'(?:\d+(?:[.,]\d+)?|'+'|'.join(vals)+r')'
-              pat = re.compile(r'(?<![\w.,])(?P<lower>'+num+r')\s*(?:(?:[-–—−]|до|to)\s*'+num+r'\s*)?\+?\s*(?P<unit>лет|год(?:а|ов)?|years?|yrs?|месяц(?:а|ев)?|months?)\b')
-              found=[]; optional=[]
-              for m in pat.finditer(text):
-                  prefix=text[max(0,m.start()-120):m.start()]
-                  suffix=text[m.end():m.end()+100]
-                  n=m.group('lower'); years=vals[n] if n in vals else float(n.replace(',','.'))
-                  if m.group('unit').startswith(('месяц','month')): years/=12
-                  # An explicit preference must modify the duration itself, not a later skill.
-                  if re.search(r'(?:желательно|будет плюсом|nice to have|preferred)\s*[:—-]?\s*(?:опыт\s*(?:работы\s*)?)?(?:от\s*)?$',prefix) or re.match(r'\s*(?:опыта\s*)?(?:будет|является)\s+(?:плюсом|преимуществом)',suffix) or re.match(r'\s+(?:of\s+experience\s+)?(?:is\s+)?preferred\b',suffix):
-                      optional.append(years); continue
-                  over=bool(re.search(r'(?:более|свыше|больше|more than|over)\s*$',prefix))
-                  # Conservative: any duration above the limit is held, even if context is unclear.
-                  if years>2 or (years==2 and over):
-                      return 'REVIEW_3_PLUS', m.group(0)
-                  context=prefix[-100:]+' '+suffix[:65]
-                  if re.search(r'опыт|работал|работа|работаете|стаж|experience|worked|working|product manager|продакт|менеджер|аналитик|(?:от|минимум|at least)\s*$',context):
-                      found.append(years)
-              if found:
-                  return 'POSSIBLE_MATCH', f'{max(found):g} years'
-              if re.search(r'без опыта|опыт не обязателен|no experience required',text):
-                  return 'POSSIBLE_MATCH','0 years'
-              if optional: return 'UNKNOWN','Optional experience only'
-              return 'UNKNOWN','No reliable evidence'
+          from radar_experience import experience
 
           def priority(title, description):
               # Title and job description only; never infer B2C from employer name.
@@ -347,7 +321,7 @@ jobs:
           sent=set(history.setdefault('sent',[]))
           BASE='https://career.avito.com'
           PAT=re.compile(r'/(?:publications|vacancies)/[^/]+/(?:\d+|[a-fA-F0-9-]{36})/?')
-          REVISION=9
+          REVISION=11
 
           def save():
               history['sent']=sorted(sent)
