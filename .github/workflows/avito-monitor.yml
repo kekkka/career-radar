@@ -7,11 +7,11 @@ on:
         type: boolean
         default: false
   schedule:
-    - cron: '7,37 * * * *'
+    - cron: '7 * * * *'
 permissions:
   contents: write
 concurrency:
-  group: avito-monitor
+  group: career-radar-delivery
   cancel-in-progress: false
 jobs:
   monitor:
@@ -222,7 +222,7 @@ jobs:
               rp = robot_cache[root]
               return rp is not None and rp.can_fetch(AGENT, url)
 
-          from radar_lifecycle import is_closed, vacancy_key, belongs_to_habr, archived_label
+          from radar_lifecycle import is_closed, vacancy_key, belongs_to_habr, archived_label, posting_experience
           from functools import lru_cache
           @lru_cache(maxsize=32)
           def get_page(url):
@@ -329,7 +329,7 @@ jobs:
           sent=set(history.setdefault('sent',[]))
           BASE='https://career.avito.com'
           PAT=re.compile(r'/(?:publications|vacancies)/[^/]+/(?:\d+|[a-fA-F0-9-]{36})/?')
-          REVISION=13
+          REVISION=14
 
           def save():
               history['sent']=sorted(sent)
@@ -410,7 +410,7 @@ jobs:
                       if not title: raise RuntimeError('Missing title')
                       role=classify(title)
                       desc=description(body,p) if role else ''
-                      state,evidence=combine_experience(experience(desc), header_experience(p.text,title), experience(requirements_text(p.text)))
+                      state,evidence=combine_experience(experience(desc), header_experience(p.text,title), experience(requirements_text(p.text)),posting_experience(list(job_objects(body))))
                       if is_closed(' '.join(p.text),list(job_objects(body))) or archived_label(p.text,title):
                           state,evidence='CLOSED','Archived or expired'
                       ranking=priority(title,desc)

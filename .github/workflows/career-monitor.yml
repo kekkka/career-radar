@@ -15,11 +15,11 @@ on:
         type: boolean
         default: false
   schedule:
-    - cron: '17,47 * * * *'
+    - cron: '17 * * * *'
 permissions:
   contents: write
 concurrency:
-  group: career-monitor
+  group: career-radar-delivery
   cancel-in-progress: false
 jobs:
   monitor:
@@ -331,7 +331,7 @@ jobs:
               exclude = (
                   r"\bsenior\b|\blead\b|\bhead\b|"
                   r"\bprincipal\b|\bstaff\b|"
-                  r"старший|ведущий|руководитель|"
+                  r"старший|ведущий|руководитель|тимлид|team\s*lead|лид\s+продукт|"
                   r"product marketing|"
                   r"продуктов\w* маркетолог|"
                   r"product design|дизайнер|"
@@ -415,7 +415,7 @@ jobs:
               rp = robot_cache[root]
               return rp is not None and rp.can_fetch(AGENT, url)
 
-          from radar_lifecycle import is_closed, vacancy_key, belongs_to_habr, archived_label
+          from radar_lifecycle import is_closed, vacancy_key, belongs_to_habr, archived_label, active_application, posting_experience
           from functools import lru_cache
           @lru_cache(maxsize=32)
           def get_page(url):
@@ -648,7 +648,7 @@ jobs:
                       final,body,_=get_page(url)
                       if urlparse(final).hostname!='vacario.ru': raise ValueError('Unexpected RSS host')
                       entries=rss_entries(body)
-                      target=[(link,title) for link,title in entries if classify(title)]
+                      target=[(link,title) for link,title in entries if classify(title) and (company!='Кинопоиск' or re.search(r'кинопоиск|kinopoisk',title+' '+link,re.I))]
                       for link,title in target:
                           print('RSS CANDIDATE (unverified):',company,'|',title,'|',link)
                       health[source_id(company,source_type,url)]='PARTIAL' if entries else 'NO_CARDS_UNVERIFIED'
@@ -726,7 +726,11 @@ jobs:
                           if archived_label(dp.text,title):
                               outcomes[key]='CLOSED'; seen_jobs.add(key)
                               print('ARCHIVED BADGE:',link); continue
-                          state,evidence=combine_experience(experience(desc_text),header_experience(dp.text,title))
+                          state,evidence=combine_experience(experience(desc_text),header_experience(dp.text,title),posting_experience(objects))
+                          if state=='POSSIBLE_MATCH' and not active_application(dp.text,dp.links,title):
+                              state,evidence='UNKNOWN','Open application not confirmed'
+                          if state=='POSSIBLE_MATCH' and urlparse(link).hostname=='yandex.ru' and header_experience(dp.text,title)[0]=='UNKNOWN':
+                              state,evidence='UNKNOWN','Yandex experience header not verified'
                       except Exception as e:
                           errors+=1
                           state,evidence='UNKNOWN',type(e).__name__
