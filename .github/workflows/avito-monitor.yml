@@ -342,6 +342,13 @@ jobs:
                   if p.hostname=='career.avito.com' and p.scheme=='https': result.add(BASE+p.path.rstrip('/')+'/')
               return result
 
+          from radar_avito_catalog import can_skip_catalog
+          catalog_labels={}
+          def collect_labels(parser,source):
+              for href,title in parser.links:
+                  p=urlparse(urljoin(source,href))
+                  if p.scheme=='https' and p.hostname=='career.avito.com' and PAT.fullmatch(p.path):
+                      catalog_labels.setdefault(BASE+p.path.rstrip('/')+'/',set()).add(title)
           def page_title(body, parser):
               for obj in job_objects(body):
                   if obj.get('title'): return str(obj['title']).strip()
@@ -382,6 +389,7 @@ jobs:
               record_diagnostics(0,0,0,0,1,'ERROR')
               raise
           all_links=links(p,final)
+          collect_labels(p,final)
           categories={x for x in all_links if re.fullmatch(r'/publications/[^/]+/',urlparse(x).path)}
           vacancies={x for x in all_links if PAT.fullmatch(urlparse(x).path)}
           errors=0
@@ -389,13 +397,14 @@ jobs:
               try:
                   final,body,p=get_page(category)
                   vacancies.update(x for x in links(p,final) if PAT.fullmatch(urlparse(x).path))
+                  collect_labels(p,final)
               except Exception as e:
                   errors+=1; print('CATEGORY ERROR:',category,type(e).__name__)
           if not vacancies:
               record_diagnostics(0,0,0,0,errors,'ERROR' if errors else 'NO_CARDS_UNVERIFIED')
               raise SystemExit('No vacancies found')
           print('TOTAL VACANCIES:',len(vacancies))
-          pending=[]; held=0; delivered=0; closed=0
+          pending=[]; held=0; delivered=0; closed=0; catalog_skipped=0; details_fetched=0
           other=Path('data/career_history.json')
           other_sent=set(json.loads(other.read_text()).get('sent',[])) if other.exists() else set()
           for i,url in enumerate(sorted(vacancies),1):
@@ -404,7 +413,14 @@ jobs:
               try:
                   if job_id in sent or identity_keys('Авито',url).intersection(other_sent): continue
                   job=checked.get(job_id,{})
-                  if job.get('revision')!=REVISION or time.time()-job.get('timestamp',0)>=86400:
+                  age=time.time()-job.get('timestamp',0)
+                  # Matching verified non-target titles may reuse detail facts for 7 days;
+                  # a new, ambiguous or changed title always uses normal detail verification.
+                  if job.get('revision')==REVISION and age<7*86400 and can_skip_catalog(catalog_labels.get(url,()),job.get('title'),classify):
+                      catalog_skipped+=1; continue
+                  # Revalidate eligible cached jobs before sending, even within the daily TTL.
+                  if job.get('revision')!=REVISION or age>=86400 or job.get('state')=='POSSIBLE_MATCH':
+                      details_fetched+=1
                       final,body,p=get_page(url)
                       title=page_title(body,p)
                       if not title: raise RuntimeError('Missing title')
@@ -429,6 +445,8 @@ jobs:
               except Exception as e:
                   errors+=1; print('VACANCY ERROR:',url,type(e).__name__)
           send_enabled=os.getenv('SEND_NOTIFICATIONS','').lower()=='true'
+          print('CATALOGUE VERIFIED NON-TARGET SKIPS:',catalog_skipped)
+          print('DETAIL FETCHES:',details_fetched)
           print('ELIGIBLE NEW VACANCIES:',len(pending))
           for _,job_id,url,job,role in sorted(pending,key=lambda x:x[0],reverse=True):
               if not send_enabled:
