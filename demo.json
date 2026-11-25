@@ -1,0 +1,30 @@
+[
+  {
+    "id": "demo-1",
+    "company": "Авито",
+    "title": "Junior Product Manager",
+    "description": "Опыт от 1 года",
+    "url": "https://example.com/demo-1"
+  },
+  {
+    "id": "demo-2",
+    "company": "Lamoda",
+    "title": "Middle Product Manager",
+    "description": "Опыт от 2 лет",
+    "url": "https://example.com/demo-2"
+  },
+  {
+    "id": "demo-3",
+    "company": "VK",
+    "title": "Product Manager",
+    "description": "Опыт от 3 лет",
+    "url": "https://example.com/demo-3"
+  },
+  {
+    "id": "demo-analyst",
+    "company": "Яндекс",
+    "title": "Младший продуктовый аналитик",
+    "description": "Опыт от 1 года. SQL, Python, анализ воронок и A/B-тестирование.",
+    "url": "https://example.com/demo-analyst"
+  }
+]
