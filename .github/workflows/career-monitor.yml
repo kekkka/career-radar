@@ -207,6 +207,7 @@ jobs:
           COMPANIES["Точка"]["aliases"].append("Точка Банк")
           # Public source registry: discovery is not proof of permission or coverage.
           # No LinkedIn scraping; use official email alerts or explicitly submitted vacancies.
+          COMPANIES={k:v for k,v in COMPANIES.items() if k in {'Яндекс','ВкусВилл','Dodo Brands','Авиасейлс','Циан'}}
           CHANNELS = {
               'avito_career': 'Авито',
               'ya_jobs_pm': 'Яндекс',
@@ -564,7 +565,7 @@ jobs:
               title=fields.get('должность','')
               link=fields.get('ссылка','')
               desc=fields.get('описание','')
-              if company not in set(COMPANIES)|{'Авито'} or source not in ('internal','referral','linkedin','telegram') or not title or not desc: return None
+              if company not in set(COMPANIES)|{'Авито'} or source not in ('internal','referral','telegram') or not title or not desc: return None
               u=urlparse(link)
               if u.scheme!='https' or not u.hostname or u.username or u.password: return None
               role=classify(title)
@@ -600,7 +601,8 @@ jobs:
                   if len(names)!=1: return None
                   company=names[0]
               if company=='Wink' and not re.search(r'\bwink\b|винк',title,re.I): return None
-              if company=='Яндекс' and re.search(r'кинопоиск|kinopoisk',title,re.I): company='Кинопоиск'
+              if company=='Яндекс' and re.search(r'кинопоиск|kinopoisk',title,re.I): return None
+              if company not in set(COMPANIES)|{'Авито'}: return None
               state,evidence=experience(body)
               mid=msg.get('message_id')
               if not isinstance(mid,int) or mid<=0: return None
@@ -693,6 +695,7 @@ jobs:
                   for link,title in candidates:
                       key=(company,canonical(link)); cards.add(key[1])
                       role=classify(title)
+                      if company=='Яндекс' and re.search(r'кинопоиск|kinopoisk',title+' '+link,re.I): continue
                       if not role or key in seen_jobs: continue
                       if identity_keys(company,link).intersection(seen_ids): continue
                       if source_type=='career' and identity_keys(company,link).intersection(sent):
@@ -735,6 +738,7 @@ jobs:
                                   hp=Parser(); hp.feed(heading); candidate=' '.join(hp.text).strip()
                                   if classify(candidate): title=candidate; role=classify(candidate); break
                               desc_text=requirements_text(dp.text)
+                          if company=='Яндекс' and re.search(r'кинопоиск|kinopoisk',title+' '+link,re.I): continue
                           if archived_label(dp.text,title):
                               outcomes[key]='CLOSED'; seen_jobs.add(key); seen_ids.update(identity_keys(company,link))
                               print('ARCHIVED BADGE:',link); continue
@@ -808,6 +812,7 @@ jobs:
           saved_channels=AUTHORIZED_CHANNELS.copy()
           AUTHORIZED_CHANNELS.add('ya_jobs_pm')
           sample={'chat':{'type':'channel','username':'ya_jobs_pm'},'message_id':123,'date':int(time.time()),'text':'Менеджер продукта B2C\nОпыт от 2 лет'}
+          assert set(COMPANIES)=={'Яндекс','ВкусВилл','Dodo Brands','Авиасейлс','Циан'}
           assert parse_channel_post(sample)[0]=='Яндекс'
           assert parse_channel_post(sample)[4]=='POSSIBLE_MATCH'
           assert parse_channel_post(dict(sample,text='Senior Product Manager\nОпыт от 2 лет')) is None
@@ -818,18 +823,13 @@ jobs:
           print('SELF TESTS PASSED')
 
           scan_started=time.monotonic()
-          from linkedin_intake import linkedin_records
           linkedin_only=os.getenv('LINKEDIN_ONLY','').lower()=='true'
-          records=linkedin_records(os.getenv('LINKEDIN_RECORDS',''),set(COMPANIES)|{'Авито'})
-          print('LINKEDIN VALID RECORDS:',len(records))
-          for company,title,link,years in records:
-              role=classify(title)
-              if role:
-                  if send_enabled: notify(company,role,title,link,'POSSIBLE_MATCH',f'{years:g} years',priority(title,''),'linkedin')
-                  else: print('LINKEDIN DRY RUN: eligible record')
+          if linkedin_only:
+              print('LINKEDIN PAUSED: no records processed')
+              raise SystemExit(0)
           if not linkedin_only: receive_submissions()
           # These employers are optional: no periodic site/RSS scanning, but verified inbound submissions remain accepted.
-          OPTIONAL_EMPLOYERS={'Т-Банк','Точка'}
+          OPTIONAL_EMPLOYERS=set()
           for company,config in ({} if linkedin_only else COMPANIES).items():
               if company in OPTIONAL_EMPLOYERS:
                   print('OPTIONAL EMPLOYER: periodic scan disabled',company)
@@ -862,13 +862,10 @@ jobs:
               rows=[r for r in reports if r[0]==company]
               print('COVERAGE:',company,'sources',len(rows),'cards',sum(r[2] for r in rows),'errors',sum(r[4] for r in rows))
           print('COVERAGE: Авито separate workflow; channel intake if authorized')
-          print('LINKEDIN: validated public facts accepted via manual dispatch')
+          print('LINKEDIN: paused')
           print('INTERNAL: authorized submission only; private portal coverage not established')
           print('NOTIFICATION ERRORS:', send_errors)
 
-          if send_enabled and linkedin_only:
-              history['linkedin_diagnostics']={'at':datetime.now(timezone.utc).isoformat(),'records':len(records),'sent':notifications,'errors':send_errors}
-              save_history()
           def read_avito_diagnostics():
               try:
                   return json.loads(Path('data/avito_history.json').read_text()).get('diagnostics',{})
@@ -891,7 +888,7 @@ jobs:
               stats['elapsed_seconds']=round(time.monotonic()-scan_started)
               stats['outcomes']={status:sum(v==status for v in outcomes.values()) for status in ('POSSIBLE_MATCH','UNKNOWN','REVIEW_3_PLUS','CLOSED')}
               stats['avito']=read_avito_diagnostics()
-              stats['linkedin']=history.get('linkedin_diagnostics',{})
+
               if now.hour>=20 and history.get('daily_report_sent')!=day:
                   try:
                       telegram_api('sendMessage',{'chat_id':os.environ['TELEGRAM_CHAT_ID'],'text':daily_message(stats)})
