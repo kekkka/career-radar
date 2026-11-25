@@ -1,6 +1,11 @@
 name: Avito Career Monitor
 on:
   workflow_dispatch:
+    inputs:
+      send_notifications:
+        description: 'Send notifications (otherwise dry run)'
+        type: boolean
+        default: false
   schedule:
     - cron: '7,37 * * * *'
 permissions:
@@ -20,6 +25,7 @@ jobs:
       - name: Find and send Avito vacancies V1.2
         env:
           PYTHONUNBUFFERED: "1"
+          SEND_NOTIFICATIONS: ${{ github.event_name == 'schedule' || inputs.send_notifications }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
@@ -422,7 +428,12 @@ jobs:
                   pending.append((job['ranking'][0],job_id,url,job,role))
               except Exception as e:
                   errors+=1; print('VACANCY ERROR:',url,type(e).__name__)
+          send_enabled=os.getenv('SEND_NOTIFICATIONS','').lower()=='true'
+          print('ELIGIBLE NEW VACANCIES:',len(pending))
           for _,job_id,url,job,role in sorted(pending,key=lambda x:x[0],reverse=True):
+              if not send_enabled:
+                  print('DRY RUN: eligible vacancy',job['title'],url)
+                  continue
               try:
                   message=format_notification('Авито',role,job['title'],job['state'],job['evidence'],job['ranking'])
                   if job['internal']: message=message.replace('🌐 Тип: публичная вакансия','🔒 Возможно внутренняя вакансия — уточнить способ отклика')
@@ -439,7 +450,7 @@ jobs:
           if errors: raise SystemExit(1)
           PY
       - name: Save vacancy history
-        if: always()
+        if: always() && (github.event_name == 'schedule' || inputs.send_notifications)
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
