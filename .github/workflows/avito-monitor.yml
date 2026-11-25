@@ -222,7 +222,7 @@ jobs:
               rp = robot_cache[root]
               return rp is not None and rp.can_fetch(AGENT, url)
 
-          from radar_lifecycle import is_closed, vacancy_key, belongs_to_habr
+          from radar_lifecycle import is_closed, vacancy_key, belongs_to_habr, archived_label
           from functools import lru_cache
           @lru_cache(maxsize=32)
           def get_page(url):
@@ -266,7 +266,7 @@ jobs:
                   try: yield from walk(json.loads(m.group(1)))
                   except (ValueError,TypeError): continue
 
-          from radar_experience import experience
+          from radar_experience import experience, header_experience, requirements_text, combine_experience
 
           def priority(title, description):
               # Title and job description only; never infer B2C from employer name.
@@ -329,7 +329,7 @@ jobs:
           sent=set(history.setdefault('sent',[]))
           BASE='https://career.avito.com'
           PAT=re.compile(r'/(?:publications|vacancies)/[^/]+/(?:\d+|[a-fA-F0-9-]{36})/?')
-          REVISION=12
+          REVISION=13
 
           def save():
               history['sent']=sorted(sent)
@@ -410,8 +410,8 @@ jobs:
                       if not title: raise RuntimeError('Missing title')
                       role=classify(title)
                       desc=description(body,p) if role else ''
-                      state,evidence=experience(desc)
-                      if is_closed(' '.join(p.text),list(job_objects(body))):
+                      state,evidence=combine_experience(experience(desc), header_experience(p.text,title), experience(requirements_text(p.text)))
+                      if is_closed(' '.join(p.text),list(job_objects(body))) or archived_label(p.text,title):
                           state,evidence='CLOSED','Archived or expired'
                       ranking=priority(title,desc)
                       # Login wording is only a possible internal signal, not proof.
