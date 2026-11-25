@@ -1,0 +1,65 @@
+name: Career Radar First Release
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'data/release-reset-2026-11-25.json'
+permissions:
+  contents: write
+concurrency:
+  group: career-radar-delivery
+  cancel-in-progress: false
+jobs:
+  first-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Run offline acceptance tests
+        run: python3 -m unittest discover -s tests -v
+      - name: Full Avito scan
+        env:
+          SEND_NOTIFICATIONS: 'true'
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          python3 -u - <<'PY'
+          from pathlib import Path
+          import textwrap
+          p=Path('.github/workflows/avito-monitor.yml')
+          src=p.read_text().split("python3 -u - <<'PY'\n",1)[1].split('\n          PY',1)[0]
+          exec(compile(textwrap.dedent(src),str(p),'exec'),{'__name__':'__main__'})
+          PY
+      - name: Full general scan
+        if: success() || failure()
+        env:
+          SEND_NOTIFICATIONS: 'true'
+          LINKEDIN_ONLY: 'false'
+          LINKEDIN_RECORDS: '[]'
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          AUTHORIZED_VACANCY_CHANNELS: ${{ vars.AUTHORIZED_VACANCY_CHANNELS }}
+        run: |
+          python3 -u - <<'PY'
+          from pathlib import Path
+          import textwrap
+          p=Path('.github/workflows/career-monitor.yml')
+          src=p.read_text().split("python3 -u - <<'PY'\n",1)[1].split('\n          PY',1)[0]
+          exec(compile(textwrap.dedent(src),str(p),'exec'),{'__name__':'__main__'})
+          PY
+      - name: Persist histories even after a partial failure
+        if: always()
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data/avito_history.json data/career_history.json
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'Save initial full release scan'
+          for attempt in 1 2 3; do
+            git pull --rebase origin main || exit 1
+            if git push origin HEAD:main; then exit 0; fi
+            sleep 5
+          done
+          exit 1
