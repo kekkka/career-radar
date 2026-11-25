@@ -201,9 +201,9 @@ jobs:
           COMPANIES["Wink"]["career"].append("https://career.habr.com/companies/wink")
           COMPANIES["Самокат"]["career"].append("https://career.habr.com/companies/ecom-tech")
           # Aggregator listings are discovery only until the detail verifies employer and experience.
-          COMPANIES["Т-Банк"]["career"].append("https://vacario.ru/company/tbank")
-          COMPANIES["Точка"]["career"].append("https://vacario.ru/company/tochka")
-          COMPANIES["Кинопоиск"]["career"].append("https://vacario.ru/company/yandex")
+          COMPANIES["Т-Банк"]["career"].append("https://vacario.ru/company/tbank/feed.xml")
+          COMPANIES["Точка"]["career"].append("https://vacario.ru/company/tochka/feed.xml")
+          COMPANIES["Кинопоиск"]["career"].append("https://vacario.ru/company/yandex/feed.xml")
           COMPANIES["Точка"]["aliases"].append("Точка Банк")
           # Public source registry: discovery is not proof of permission or coverage.
           # No LinkedIn scraping; use official email alerts or explicitly submitted vacancies.
@@ -638,7 +638,27 @@ jobs:
           MAX_PAGES=5
           MAX_DETAILS=30
 
+          from radar_rss import rss_entries
+
           def inspect_source(company, source_type, url):
+              if urlparse(url).hostname=='vacario.ru':
+                  # Use the published personal RSS subscription, not the HTML catalogue.
+                  # A feed is discovery only; no notifications on unverified listings.
+                  try:
+                      final,body,_=get_page(url)
+                      if urlparse(final).hostname!='vacario.ru': raise ValueError('Unexpected RSS host')
+                      entries=rss_entries(body)
+                      target=[(link,title) for link,title in entries if classify(title)]
+                      for link,title in target:
+                          print('RSS CANDIDATE (unverified):',company,'|',title,'|',link)
+                      health[source_id(company,source_type,url)]='PARTIAL' if entries else 'NO_CARDS_UNVERIFIED'
+                      reports.append((company,source_type,len(entries),len(target),0))
+                      print('RSS DISCOVERY:',company,'entries',len(entries),'role candidates',len(target),'notifications disabled until original verified')
+                  except Exception as e:
+                      health[source_id(company,source_type,url)]='ERROR'
+                      reports.append((company,source_type,0,0,1))
+                      print('RSS ERROR:',company,type(e).__name__,str(e)[:120])
+                  return
               print('\nCOMPANY:',company,'SOURCE:',source_type,'URL:',url)
               queue=deque([url]); pages=set(); cards=set(); matches=0; errors=0; details=0; limited=False
               while queue and len(pages)<MAX_PAGES:
