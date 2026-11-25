@@ -1,392 +1,452 @@
-
 name: Avito Career Monitor
-
 on:
   workflow_dispatch:
-
+  schedule:
+    - cron: '7,37 * * * *'
 permissions:
   contents: write
-
 concurrency:
   group: avito-monitor
   cancel-in-progress: false
-
 jobs:
   monitor:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 30
-
     steps:
-      - name: Download project
-        uses: actions/checkout@v4
-
-      - name: Find and send Avito vacancies
+      - uses: actions/checkout@v4
+      - name: Find and send Avito vacancies V0.9
         env:
+          PYTHONUNBUFFERED: "1"
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          PYTHONUNBUFFERED: "1"
         run: |
           python3 -u - <<'PY'
-          import os
-          import re
-          import json
-          import time
-          import unicodedata
           import urllib.request
           import urllib.error
           import urllib.robotparser
-
+          import re
+          import time
+          import json
+          import os
+          import hashlib
+          import html
           from pathlib import Path
+          from collections import deque
+          from urllib.parse import parse_qs, urlunparse, urlencode
           from html.parser import HTMLParser
           from urllib.parse import urljoin, urlparse
 
-          BASE = "https://career.avito.com"
           AGENT = "CareerRadar"
-          HISTORY = Path("data/avito_history.json")
-          RECHECK = 86400
-
-          history = json.loads(
-              HISTORY.read_text(encoding="utf-8")
-          )
-
-          checked = history.setdefault("checked", {})
-          sent = set(history.setdefault("sent", []))
-
-          def save():
-              history["sent"] = sorted(sent)
-              HISTORY.write_text(
-                  json.dumps(
-                      history,
-                      ensure_ascii=False,
-                      indent=2
-                  ),
-                  encoding="utf-8"
-              )
-
-          robots = urllib.robotparser.RobotFileParser()
-          robots.set_url(BASE + "/robots.txt")
-          robots.read()
 
           class Parser(HTMLParser):
               def __init__(self):
                   super().__init__()
-                  self.links = set()
-                  self.title = ""
+                  self.links = []
                   self.text = []
-                  self.in_title = False
+                  self.href = None
+                  self.anchor = []
                   self.skip = 0
 
               def handle_starttag(self, tag, attrs):
-                  if tag == "title":
-                      self.in_title = True
                   if tag in ("script", "style"):
                       self.skip += 1
+
                   if tag == "a":
-                      href = dict(attrs).get("href")
-                      if href:
-                          self.links.add(href)
+                      self.href = dict(attrs).get("href")
+                      self.anchor = []
 
               def handle_endtag(self, tag):
-                  if tag == "title":
-                      self.in_title = False
                   if tag in ("script", "style"):
                       self.skip = max(0, self.skip - 1)
 
+                  if tag == "a":
+                      if self.href:
+                          self.links.append((
+                              self.href,
+                              " ".join(self.anchor)
+                          ))
+
+                      self.href = None
+                      self.anchor = []
+
               def handle_data(self, data):
-                  if self.in_title:
-                      self.title += data
                   if not self.skip and data.strip():
                       self.text.append(data.strip())
 
-          def fetch(url):
-              if not robots.can_fetch(AGENT, url):
-                  raise RuntimeError("Restricted by robots.txt")
+                      if self.href:
+                          self.anchor.append(data.strip())
 
-              time.sleep(3)
+          KEYWORDS = re.compile(
+              r"vacanc|career|jobs|ваканси|"
+              r"продакт|product|продукт|"
+              r"аналитик|analyst|"
+              r"стажиров|intern|junior|middle|"
+              r"реферал|referral|"
+              r"внутренн|internal|"
+              r"показать ещё|показать еще",
+              re.IGNORECASE
+          )
 
-              request = urllib.request.Request(
-                  url,
-                  headers={"User-Agent": AGENT}
-              )
+          def is_vacancy(url):
+              parsed = urlparse(url)
+              host = parsed.netloc.lower()
+              path = parsed.path.rstrip("/")
 
-              with urllib.request.urlopen(
-                  request, timeout=30
-              ) as response:
-                  parser = Parser()
-                  parser.feed(response.read().decode(
-                      "utf-8", errors="replace"
+              if host == "yandex.ru":
+                  return bool(re.fullmatch(
+                      r"/jobs/vacancies/[^/]+-\d+",
+                      path
                   ))
 
-              return parser
+              if host in (
+                  "aviasales.ru",
+                  "www.aviasales.ru"
+              ):
+                  return bool(re.fullmatch(
+                      r"/about/vacancies/\d+",
+                      path
+                  ))
 
-          def normalize(text):
-              text = unicodedata.normalize("NFKC", text)
-              text = text.lower().replace("ё", "е")
-              return re.sub(r"[\W_]+", " ", text).strip()
+              if host in (
+                  "vkusvill.ru",
+                  "www.vkusvill.ru"
+              ):
+                  return bool(re.fullmatch(
+                      r"/job/vacancys/[^/]+\.html",
+                      path
+                  ))
 
-          def classify(title, category):
-              text = normalize(title)
+              if host == "hr.tochka.com":
+                  return bool(re.fullmatch(r"/vacancies/catalog/[^/]+", path))
+              if host in ("tbank.ru", "www.tbank.ru"):
+                  return bool(re.fullmatch(r"/career/it/vacancy/.+/[0-9a-f-]{36}", path))
+              return False
 
-              excluded = [
-                  r"\b(senior|lead|principal|staff|head|cpo)\b",
-                  r"\b(ведущий|старший|руководитель|директор)\b",
-                  r"\bdata analyst\b",
-                  r"\bаналитик\w*\s+данных\b",
-                  r"\bразработчик\w*\b",
-                  r"\bdeveloper\b",
-                  r"\bengineer\b",
-                  r"\bинженер\w*\b",
-                  r"\bbi\b",
-                  r"\bdata scientist\b",
-                  r"\bproject manager\b",
-                  r"\bменеджер\w*\s+проект",
-                  r"\bменеджер\w*\s+по\s+управлению\s+проект",
-                  r"\bсистемн\w*\s+аналитик",
-                  r"\bбизнес\s+аналитик",
-                  r"\bмаркетингов\w*\s+аналитик",
-                  r"\bфинансов\w*\s+аналитик",
-                  r"\b(system|business|marketing|financial)\s+analyst\b",
-                  r"\bproduct marketing\b",
-                  r"\bproduct designer\b",
-                  r"\bдизайнер\w*\b"
-              ]
+          def classify(title):
+              text = title.lower().replace("ё", "е")
+              text = re.sub(r"[-–—‑−]", " ", text)
 
-              if any(re.search(p, text) for p in excluded):
+              exclude = (
+                  r"\bsenior\b|\blead\b|\bhead\b|"
+                  r"\bprincipal\b|\bstaff\b|"
+                  r"старший|ведущий|руководитель|"
+                  r"product marketing|"
+                  r"продуктов\w* маркетолог|"
+                  r"product design|дизайнер|"
+                  r"developer|разработчик|"
+                  r"data engineer|\bbi\b|"
+                  r"data\s+analyst|аналитик\w*\s+данных|"
+                  r"business analyst|бизнес аналитик|"
+                  r"system analyst|системный аналитик|"
+                  r"project manager|менеджер проектов"
+              )
+
+              if re.search(exclude, text):
                   return None
 
-              analysts = [
-                  r"\bproduct analyst\b",
-                  r"\bproduct analytics\b",
-                  r"\bпродуктов\w*\s+аналитик",
-                  r"\bаналитик\w*\s+продукт",
-                  r"\bпродакт\s+аналитик",
-                  r"\bproduct analyst intern\b",
-                  r"\bстажер\w*\s+продуктов\w*\s+аналитик"
-              ]
+              analyst = (
+                  r"product analy(?:st|tics)|"
+                  r"продуктов\w* аналитик|"
+                  r"аналитик\w* продукт|"
+                  r"аналитик\w* по продукт"
+              )
 
-              managers = [
-                  r"\bproduct manager\b",
-                  r"\bproduct owner\b",
-                  r"\bproduct intern\b",
-                  r"\bproduct assistant\b",
-                  r"\bпродакт\b",
-                  r"\bпродукт\w*\s+менеджер",
-                  r"\bменеджер\w*\s+продукт",
-                  r"\bменеджер\w*\s+по\s+продукт",
-                  r"\bменеджер\w*\s+по\s+развитию\s+продукт",
-                  r"\bвладелец\s+продукт",
-                  r"\bapm\b"
-              ]
+              manager = (
+                  r"product manager|"
+                  r"product owner|"
+                  r"product management intern|"
+                  r"product intern|"
+                  r"продакт|"
+                  r"менеджер\w* продукта|"
+                  r"менеджер\w* по продукт|"
+                  r"продуктов\w* менеджер|"
+                  r"менеджер\w* по развитию продукта|"
+                  r"владелец продукта|\bapm\b"
+              )
 
-              if any(re.search(p, text) for p in analysts):
-                  return "Product Analytics"
+              if re.search(analyst, text):
+                  return "Product Analyst"
 
-              if any(re.search(p, text) for p in managers):
-                  return "Product Management"
-
-              if category == "upravlenie-produktom":
-                  if re.search(r"\b(pm|po|tpm)\b", text):
-                      return "Product Management"
+              if re.search(manager, text):
+                  return "Product Manager"
 
               return None
 
-          def send_message(text):
-              token = os.environ["TELEGRAM_BOT_TOKEN"]
 
-              payload = json.dumps({
-                  "chat_id": os.environ["TELEGRAM_CHAT_ID"],
-                  "text": text,
-                  "disable_web_page_preview": True
-              }).encode("utf-8")
 
-              request = urllib.request.Request(
-                  f"https://api.telegram.org/bot{token}/sendMessage",
-                  data=payload,
-                  headers={
-                      "Content-Type": "application/json"
-                  }
-              )
+          # No cookies, login, access bypass or scraping of LinkedIn.
+          # Check robots before each redirect and fail closed on unknown policy.
+          robot_cache = {}
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self, req, fp, code, msg, headers, newurl):
+                  return None
+          opener = urllib.request.build_opener(NoRedirect())
 
-              try:
-                  with urllib.request.urlopen(
-                      request, timeout=30
-                  ) as response:
-                      result = json.load(response)
+          def raw(url):
+              req = urllib.request.Request(url, headers={"User-Agent": AGENT})
+              with opener.open(req, timeout=20) as response:
+                  return response.read(8*1024*1024).decode("utf-8", errors="replace")
 
-                  if not result.get("ok"):
-                      raise RuntimeError("Telegram rejected message")
+          def allowed(url):
+              p = urlparse(url)
+              if p.scheme != "https" or not p.hostname or p.username:
+                  return False
+              root = p.scheme + "://" + p.netloc
+              if root not in robot_cache:
+                  rp = urllib.robotparser.RobotFileParser()
+                  try:
+                      rp.parse(raw(root + "/robots.txt").splitlines())
+                  except urllib.error.HTTPError as e:
+                      if e.code == 404:
+                          rp.parse([])
+                      else:
+                          print("ROBOTS HTTP STATUS:", root, e.code)
+                          rp = None
+                  except Exception as e:
+                      print("ROBOTS FETCH ERROR:", root, type(e).__name__)
+                      rp = None
+                  robot_cache[root] = rp
+              rp = robot_cache[root]
+              return rp is not None and rp.can_fetch(AGENT, url)
 
-              except urllib.error.HTTPError as error:
-                  raise RuntimeError(
-                      f"Telegram error: {error.code}"
-                  ) from None
+          def get_page(url):
+              for _ in range(5):
+                  if not allowed(url):
+                      raise RuntimeError("ROBOTS RESTRICTED OR UNVERIFIED")
+                  rp = robot_cache[urlparse(url).scheme + "://" + urlparse(url).netloc]
+                  delay = rp.crawl_delay(AGENT) or rp.crawl_delay("*") or 3
+                  rate = rp.request_rate(AGENT) or rp.request_rate("*")
+                  if rate:
+                      delay = max(delay, rate.seconds / rate.requests)
+                  if delay > 30:
+                      raise RuntimeError("CRAWL DELAY exceeds test budget")
+                  time.sleep(max(3, delay))
+                  try:
+                      body = raw(url)
+                      parser = Parser()
+                      parser.feed(body)
+                      return url, body, parser
+                  except urllib.error.HTTPError as e:
+                      if e.code in (301,302,303,307,308) and e.headers.get("Location"):
+                          url = urljoin(url, e.headers["Location"])
+                          continue
+                      raise
+              raise RuntimeError("Too many redirects")
 
-              except urllib.error.URLError:
-                  raise RuntimeError(
-                      "Telegram connection failed"
-                  ) from None
+          def canonical(url):
+              p = urlparse(url)
+              return urlunparse((p.scheme,p.netloc.lower(),p.path.rstrip('/'), '', '', ''))
 
-              time.sleep(2)
+          def job_objects(body):
+              def walk(obj):
+                  if isinstance(obj, list):
+                      for v in obj: yield from walk(v)
+                  elif isinstance(obj, dict):
+                      types = obj.get('@type', [])
+                      if types == 'JobPosting' or isinstance(types,list) and 'JobPosting' in types:
+                          yield obj
+                      for v in obj.values():
+                          if isinstance(v,(dict,list)): yield from walk(v)
+              for m in re.finditer(r'<script\b[^>]*type=["\']application/ld\+json["\'][^>]*>(.*?)</script\s*>', body, re.I|re.S):
+                  try: yield from walk(json.loads(m.group(1)))
+                  except (ValueError,TypeError): continue
 
-          def collect_links(parser, source):
-              result = set()
+          def experience(text):
+              text = re.sub(r'\s+', ' ', text.lower().replace('ё','е'))
+              vals = {'один':1,'одного':1,'одной':1,'два':2,'двух':2,'три':3,'трех':3,'четыре':4,'четырех':4,'пять':5,'пяти':5,'шесть':6,'шести':6,'семь':7,'семи':7,'one':1,'two':2,'three':3,'four':4,'five':5,'six':6,'seven':7}
+              num = r'(?:\d+(?:[.,]\d+)?|'+'|'.join(vals)+r')'
+              pat = re.compile(r'(?<![\w.,])(?P<lower>'+num+r')\s*(?:(?:[-–—−]|до|to)\s*'+num+r'\s*)?\+?\s*(?P<unit>лет|год(?:а|ов)?|years?|yrs?|месяц(?:а|ев)?|months?)\b')
+              found=[]; optional=[]
+              for m in pat.finditer(text):
+                  prefix=text[max(0,m.start()-120):m.start()]
+                  suffix=text[m.end():m.end()+100]
+                  n=m.group('lower'); years=vals[n] if n in vals else float(n.replace(',','.'))
+                  if m.group('unit').startswith(('месяц','month')): years/=12
+                  # An explicit preference must modify the duration itself, not a later skill.
+                  if re.search(r'(?:желательно|будет плюсом|nice to have|preferred)\s*[:—-]?\s*(?:опыт\s*(?:работы\s*)?)?(?:от\s*)?$',prefix) or re.match(r'\s*(?:опыта\s*)?(?:будет|является)\s+(?:плюсом|преимуществом)',suffix) or re.match(r'\s+(?:of\s+experience\s+)?(?:is\s+)?preferred\b',suffix):
+                      optional.append(years); continue
+                  over=bool(re.search(r'(?:более|свыше|больше|more than|over)\s*$',prefix))
+                  # Conservative: any duration above the limit is held, even if context is unclear.
+                  if years>2 or (years==2 and over):
+                      return 'REVIEW_3_PLUS', m.group(0)
+                  context=prefix[-100:]+' '+suffix[:65]
+                  if re.search(r'опыт|работал|работа|работаете|стаж|experience|worked|working|product manager|продакт|менеджер|аналитик|(?:от|минимум|at least)\s*$',context):
+                      found.append(years)
+              if found:
+                  return 'POSSIBLE_MATCH', f'{max(found):g} years'
+              if re.search(r'без опыта|опыт не обязателен|no experience required',text):
+                  return 'POSSIBLE_MATCH','0 years'
+              if optional: return 'UNKNOWN','Optional experience only'
+              return 'UNKNOWN','No reliable evidence'
 
-              for href in parser.links:
-                  parsed = urlparse(urljoin(source, href))
+          def priority(title, description):
+              # Title and job description only; never infer B2C from employer name.
+              t = re.sub(r'\s+', ' ', (title + ' ' + description).lower().replace('ё','е'))
+              rules = {
+                  'B2C': r'\bb2c\b|consumer[- ](?:facing|product|app|market)|массов\w*\s+(?:рынок|аудитори\w*|продукт\w*)|(?:для|среди)\s+(?:частных лиц|физических лиц|физлиц|конечных потребител\w*)|потребительск\w*\s+(?:продукт\w*|сервис\w*|приложени\w*)',
+                  'Клиентский опыт (CX/UX)': r'клиентск\w*\s+(?:опыт\w*|путь|сценари\w*)|пользовательск\w*\s+(?:опыт\w*|путь|сценари\w*)|customer experience|user experience|customer journey|user journey|\bcjm\b|\b(?:cx|ux)\b|\b(?:nps|csat|ces)\b',
+                  'Активация и удержание': r'\bonboarding\b|онбординг\w*|\bretention\b|удержани\w*\s+пользовател\w*|активаци\w*\s+пользовател\w*|\bactivation\b|\bchurn\b|отток\w*\s+пользовател\w*|лояльност\w*\s+клиент\w*',
+                  'Клиентские сценарии': r'путь покупател\w*|оформлени\w*\s+заказ\w*|корзин\w*|\bcheckout\b|поиск\w*\s+товар\w*|персонализаци\w*|рекомендательн\w*\s+систем\w*|конверси\w*\s+(?:в покупку|в заказ|в оплату)|пользовательск\w*\s+воронк\w*',
+              }
+              tags=[]; evidence=[]
+              for label, pattern in rules.items():
+                  m=re.search(pattern,t)
+                  if m:
+                      tags.append(label); evidence.append(m.group(0))
+              business=bool(re.search(r'\bb2b\b|\bb2e\b|\benterprise\b|внутренн\w*\s+(?:продукт\w*|сервис\w*|платформ\w*|инструмент\w*)|корпоративн\w*\s+(?:клиент\w*|продукт\w*)',t))
+              explicit_b2c='B2C' in tags
+              cx='Клиентский опыт (CX/UX)' in tags
+              if business:
+                  level=1 if explicit_b2c or cx else 0
+              elif explicit_b2c or cx:
+                  level=2
+              elif tags:
+                  level=1
+              else:
+                  level=0
+              return level, tags, evidence, business
+          def format_notification(company, role, title, state, evidence, ranking, source='career'):
+              esc = html.escape
+              level, tags, signals, business = ranking
+              lines = ['Котик, тут кое-что особенно интересное! 💕' if source == 'internal' else 'Солнышко, тебе тут новая вакансия! 💗', '', '<b>' + esc(company.upper()) + '</b>']
+              if source == 'internal': lines.append('🔒 <b>ВНУТРЕННЯЯ ВАКАНСИЯ (по сообщению источника)</b>')
+              if source == 'referral': lines.append('🤝 <b>РЕФЕРАЛЬНАЯ ВАКАНСИЯ (по сообщению источника)</b>')
+              if level == 2: lines.append('🔥 <b>ВЫСОКИЙ ПРИОРИТЕТ — B2C / CX</b>')
+              elif level == 1: lines.append('⭐ Возможный приоритет — уточнить контекст')
+              lines.extend(['', '<b>' + esc(title[:350]) + '</b>', '', '👤 Направление: ' + esc(role)])
+              match = re.fullmatch(r'([0-9.]+) years', evidence)
+              if state == 'POSSIBLE_MATCH' and match:
+                  n = float(match.group(1))
+                  exp = 'без опыта' if n == 0 else f'от {n*12:g} мес.' if n < 1 else f'от {n:g} ' + ('года' if n in (1,2) else 'лет')
+              else: exp = 'не подтверждён'
+              lines.extend(['', '📊 Опыт: ' + esc(exp)])
+              if tags: lines.extend(['', '🎯 Фокус: ' + esc(', '.join(tags))])
+              labels = {'career':'🌐 Тип: публичная вакансия', 'internal':'📢 Источник: переданная внутренняя вакансия', 'referral':'📢 Источник: переданная реферальная вакансия', 'linkedin':'📢 Источник: переданное уведомление LinkedIn', 'telegram':'📢 Источник: переданная публикация Telegram'}
+              lines.extend(['', labels.get(source,'📢 Источник: переданная вакансия'), '', '🤝 Свяжись со своим реферером и уточни возможность отклика.' if source in ('internal','referral') else '🤝 Реферальный отклик: уточнить'])
+              return '\n'.join(lines)
 
-                  if parsed.hostname == "career.avito.com":
-                      result.add(
-                          BASE + parsed.path.rstrip("/") + "/"
-                      )
+          def telegram_api(method, data):
+              token = os.environ.get('TELEGRAM_BOT_TOKEN','')
+              if not token: raise RuntimeError('Telegram token missing')
+              req = urllib.request.Request('https://api.telegram.org/bot'+token+'/'+method, data=json.dumps(data).encode(), headers={'Content-Type':'application/json'})
+              with urllib.request.urlopen(req,timeout=25) as response: result=json.load(response)
+              if not result.get('ok'): raise RuntimeError('Telegram rejected request')
+              return result['result']
 
+
+          HISTORY=Path('data/avito_history.json')
+          history=json.loads(HISTORY.read_text(encoding='utf-8'))
+          checked=history.setdefault('checked',{})
+          sent=set(history.setdefault('sent',[]))
+          BASE='https://career.avito.com'
+          PAT=re.compile(r'/(?:publications|vacancies)/[^/]+/(?:\d+|[a-fA-F0-9-]{36})/?')
+          REVISION=9
+
+          def save():
+              history['sent']=sorted(sent)
+              HISTORY.write_text(json.dumps(history,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+
+          def links(parser, source):
+              result=set()
+              for href,_ in parser.links:
+                  p=urlparse(urljoin(source,href))
+                  if p.hostname=='career.avito.com' and p.scheme=='https': result.add(BASE+p.path.rstrip('/')+'/')
               return result
 
-          vacancy_pattern = re.compile(
-              r"/(?:publications|vacancies)/[^/]+/"
-              r"(?:\d+|[a-fA-F0-9-]{36})/?"
-          )
+          def page_title(body, parser):
+              for obj in job_objects(body):
+                  if obj.get('title'): return str(obj['title']).strip()
+              for tag in ('h1','title'):
+                  for m in re.finditer(r'<'+tag+r'\b[^>]*>(.*?)</'+tag+r'\s*>',body,re.I|re.S):
+                      p=Parser(); p.feed(m.group(1)); title=' '.join(p.text).strip()
+                      if title and title.lower() not in ('авито','вакансии','работа в авито'): return title
+              return ''
 
-          catalog = BASE + "/publications/"
-          links = collect_links(fetch(catalog), catalog)
+          def description(body, parser):
+              for obj in job_objects(body):
+                  if obj.get('description'):
+                      p=Parser(); p.feed(str(obj['description'])); return ' '.join(p.text)
+              text=' '.join(parser.text)
+              # Do not infer experience from navigation or company marketing text.
+              m=re.search(r'мы жд[её]м|требования к кандидату|требования\s*[:]|что мы ожидаем|что важно|вам предстоит|чем предстоит заниматься',text,re.I)
+              if m:
+                  return text[m.start():][:18000]
+              return ''
 
-          categories = {
-              link for link in links
-              if re.fullmatch(
-                  r"/publications/[^/]+/",
-                  urlparse(link).path
-              )
-          }
-
-          vacancies = {
-              link for link in links
-              if vacancy_pattern.fullmatch(
-                  urlparse(link).path
-              )
-          }
-
+          assert classify('Аналитик данных с фокусом на AI в команду Trisigma') is None
+          assert classify('Продакт-менеджер команды Авито Соседи')=='Product Manager'
+          assert experience('Работали менеджером продукта 3–5 лет, желательно с AI/ML')[0]=='REVIEW_3_PLUS'
+          assert experience('Опыт от 2 лет')[0]=='POSSIBLE_MATCH'
+          assert experience('')[0]=='UNKNOWN'
+          assert priority('Product Manager B2C','')[0]==2
+          assert '<b>АВИТО</b>' in format_notification('Авито','Product Manager','Test','POSSIBLE_MATCH','2 years',(2,['B2C'],[],False))
+          print('SELF TESTS PASSED')
+          root=BASE+'/publications/'
+          final,body,p=get_page(root)
+          all_links=links(p,final)
+          categories={x for x in all_links if re.fullmatch(r'/publications/[^/]+/',urlparse(x).path)}
+          vacancies={x for x in all_links if PAT.fullmatch(urlparse(x).path)}
+          errors=0
           for category in sorted(categories):
-              print("Checking category:", category)
-
-              found = collect_links(
-                  fetch(category), category
-              )
-
-              vacancies.update({
-                  link for link in found
-                  if vacancy_pattern.fullmatch(
-                      urlparse(link).path
-                  )
-              })
-
-          if not vacancies:
-              raise SystemExit("No vacancies found")
-
-          print("TOTAL VACANCIES:", len(vacancies))
-
-          processed = 0
-          skipped = 0
-          delivered = 0
-          failures = 0
-
-          for index, url in enumerate(sorted(vacancies), 1):
-              job_id = url.rstrip("/").split("/")[-1]
-
-              print(f"Progress: {index}/{len(vacancies)}")
-
-              cached = checked.get(job_id, {})
-              age = time.time() - cached.get("timestamp", 0)
-
               try:
-                  if cached and age < RECHECK:
-                      job = cached
-                      skipped += 1
-                  else:
-                      page = fetch(url)
-                      title = page.title.strip()
-
-                      if not title:
-                          raise RuntimeError("Missing title")
-
-                      category = urlparse(url).path.split("/")[2]
-                      role = classify(title, category)
-
-                      text = normalize(" ".join(page.text))
-
-                      internal = bool(re.search(
-                          r"войдите как сотрудник|"
-                          r"только для сотрудников|"
-                          r"внутренняя вакансия",
-                          text
-                      ))
-
-                      job = {
-                          "title": title,
-                          "role": role,
-                          "internal": internal,
-                          "timestamp": int(time.time())
-                      }
-
-                      checked[job_id] = job
-                      processed += 1
-                      save()
-
-                  if not job.get("role"):
-                      continue
-
-                  if job_id in sent:
-                      print("Already sent:", job["title"])
-                      continue
-
-                  access = (
-                      "🔒 Возможно внутренняя вакансия. "
-                      "Уточни возможность рекомендации."
-                      if job["internal"]
-                      else "Способ отклика: уточнить."
-                  )
-
-                  message = (
-                      "Солнышко, я нашел тебе вакансию! 💗\n\n"
-                      f"💼 {job['title']}\n\n"
-                      "🏢 Компания: Авито\n"
-                      f"📊 Направление: {job['role']}\n"
-                      "⚠️ Требуемый опыт: уточнить\n\n"
-                      f"{access}\n\n"
-                      f"🔗 {url}\n\n"
-                      "У тебя все получится! 🐱"
-                  )
-
-                  send_message(message)
-
-                  sent.add(job_id)
-                  delivered += 1
-                  save()
-
-                  print("SENT:", job["title"])
-
-              except Exception as error:
-                  failures += 1
-                  print("ERROR:", url, type(error).__name__)
-
-          save()
-
-          print("Newly checked:", processed)
-          print("Loaded from history:", skipped)
-          print("New notifications:", delivered)
-          print("Errors:", failures)
-          print("MONITOR COMPLETED")
-
-          if failures:
-              raise SystemExit("Some vacancies failed")
+                  final,body,p=get_page(category)
+                  vacancies.update(x for x in links(p,final) if PAT.fullmatch(urlparse(x).path))
+              except Exception as e:
+                  errors+=1; print('CATEGORY ERROR:',category,type(e).__name__)
+          if not vacancies: raise SystemExit('No vacancies found')
+          print('TOTAL VACANCIES:',len(vacancies))
+          pending=[]; held=0; delivered=0
+          for i,url in enumerate(sorted(vacancies),1):
+              job_id=url.rstrip('/').split('/')[-1]
+              print('PROGRESS:',i,'/',len(vacancies))
+              try:
+                  job=checked.get(job_id,{})
+                  if job.get('revision')!=REVISION or time.time()-job.get('timestamp',0)>=86400:
+                      final,body,p=get_page(url)
+                      title=page_title(body,p)
+                      if not title: raise RuntimeError('Missing title')
+                      role=classify(title)
+                      desc=description(body,p) if role else ''
+                      state,evidence=experience(desc)
+                      ranking=priority(title,desc)
+                      # Login wording is only a possible internal signal, not proof.
+                      internal=bool(re.search(r'войдите как сотрудник|только для сотрудников|внутренняя вакансия',' '.join(p.text),re.I))
+                      job={'title':title,'role':role,'state':state,'evidence':evidence,'ranking':ranking,'internal':internal,'timestamp':int(time.time()),'revision':REVISION}
+                      checked[job_id]=job; save()
+                  # Always reclassify cached titles; never trust legacy classification.
+                  role=classify(job['title'])
+                  if not role or job_id in sent: continue
+                  if job.get('state')!='POSSIBLE_MATCH':
+                      held+=1; print('HELD:',job.get('state'),job['title']); continue
+                  pending.append((job['ranking'][0],job_id,url,job,role))
+              except Exception as e:
+                  errors+=1; print('VACANCY ERROR:',url,type(e).__name__)
+          for _,job_id,url,job,role in sorted(pending,key=lambda x:x[0],reverse=True):
+              try:
+                  message=format_notification('Авито',role,job['title'],job['state'],job['evidence'],job['ranking'])
+                  if job['internal']: message=message.replace('🌐 Тип: публичная вакансия','🔒 Возможно внутренняя вакансия — уточнить способ отклика')
+                  telegram_api('sendMessage',{'chat_id':os.environ['TELEGRAM_CHAT_ID'],'text':message,'parse_mode':'HTML','disable_web_page_preview':True,'reply_markup':{'inline_keyboard':[[{'text':'Открыть вакансию','url':url}]]}})
+                  sent.add(job_id); save(); delivered+=1; time.sleep(1)
+              except Exception as e:
+                  errors+=1; print('NOTIFICATION ERROR:',type(e).__name__)
+          print('HELD FOR EXPERIENCE REVIEW:',held)
+          print('New notifications:',delivered)
+          print('Errors:',errors)
+          print('MONITOR COMPLETED')
+          if errors: raise SystemExit(1)
           PY
-
       - name: Save vacancy history
         if: always()
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add data/avito_history.json
-          if ! git diff --cached --quiet; then
-            git commit -m "Update Avito vacancy history"
-            git pull --rebase origin main
-            git push origin HEAD:main
-          fi
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'Update Avito vacancy history'
+          for attempt in 1 2 3; do
+            git pull --rebase origin main || exit 1
+            if git push origin HEAD:main; then exit 0; fi
+            sleep 5
+          done
+          exit 1

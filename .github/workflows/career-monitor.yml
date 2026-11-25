@@ -3,9 +3,11 @@ on:
   workflow_dispatch:
     inputs:
       send_notifications:
-        description: 'Send public vacancy notifications to Telegram'
+        description: 'Send vacancy notifications to Telegram'
         type: boolean
         default: false
+  schedule:
+    - cron: '17,47 * * * *'
 permissions:
   contents: write
 concurrency:
@@ -13,14 +15,15 @@ concurrency:
   cancel-in-progress: false
 jobs:
   monitor:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      - name: Check career sources V0.5
+      - name: Check career sources V0.9
         env:
           PYTHONUNBUFFERED: "1"
-          SEND_NOTIFICATIONS: ${{ inputs.send_notifications }}
+          SEND_NOTIFICATIONS: ${{ github.event_name == 'schedule' || inputs.send_notifications }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
@@ -33,6 +36,7 @@ jobs:
           import json
           import os
           import hashlib
+          import html
           from pathlib import Path
           from collections import deque
           from urllib.parse import parse_qs, urlunparse, urlencode
@@ -278,8 +282,8 @@ jobs:
                   r"продуктов\w* маркетолог|"
                   r"product design|дизайнер|"
                   r"developer|разработчик|"
-                  r"data engineer|"
-                  r"data analyst|аналитик данных|"
+                  r"data engineer|\bbi\b|"
+                  r"data\s+analyst|аналитик\w*\s+данных|"
                   r"business analyst|бизнес аналитик|"
                   r"system analyst|системный аналитик|"
                   r"project manager|менеджер проектов"
@@ -397,65 +401,158 @@ jobs:
 
           def experience(text):
               text = re.sub(r'\s+', ' ', text.lower().replace('ё','е'))
-              num = r'(\d+|одного|двух|трех|четырех|пяти|шести|семи|one|two|three|four|five|six)'
-              vals={'одного':1,'двух':2,'трех':3,'четырех':4,'пяти':5,'шести':6,'семи':7,'one':1,'two':2,'three':3,'four':4,'five':5,'six':6}
-              patterns=[r'(?:опыт(?:а|ом)?[^.!?]{0,55}?(?:от|не менее|минимум)|(?:от|не менее|минимум))\s*'+num+r'\s*(?:года?|лет)',num+r'\s*\+?\s*years?\s+(?:of\s+)?(?:relevant\s+|professional\s+)?experience',r'(?:at least|minimum(?: of)?)\s*'+num+r'\s*years?',r'опыт(?: работы)?\s*:?\s*'+num+r'\s*(?:года?|лет)']
-              found=[]
-              for pat in patterns:
-                  for m in re.finditer(pat,text):
-                      n=m.group(1); years=int(n) if n.isdigit() else vals[n]
-                      context=text[max(0,m.start()-70):m.end()+45]
-                      found.append((years,context))
-              if not found:
-                  if re.search(r'без опыта|опыт не обязателен|no experience required',text): return 'POSSIBLE_MATCH', '0 years'
-                  return 'UNKNOWN','No reliable evidence'
-              for n,c in dict.fromkeys(found): print('EXPERIENCE EVIDENCE:',n,c)
-              if any(n>=3 for n,c in found): return 'REVIEW_3_PLUS', 'Check mandatory vs optional'
-              return 'POSSIBLE_MATCH', str(max(n for n,c in found))+' years'
+              vals = {'один':1,'одного':1,'одной':1,'два':2,'двух':2,'три':3,'трех':3,'четыре':4,'четырех':4,'пять':5,'пяти':5,'шесть':6,'шести':6,'семь':7,'семи':7,'one':1,'two':2,'three':3,'four':4,'five':5,'six':6,'seven':7}
+              num = r'(?:\d+(?:[.,]\d+)?|'+'|'.join(vals)+r')'
+              pat = re.compile(r'(?<![\w.,])(?P<lower>'+num+r')\s*(?:(?:[-–—−]|до|to)\s*'+num+r'\s*)?\+?\s*(?P<unit>лет|год(?:а|ов)?|years?|yrs?|месяц(?:а|ев)?|months?)\b')
+              found=[]; optional=[]
+              for m in pat.finditer(text):
+                  prefix=text[max(0,m.start()-120):m.start()]
+                  suffix=text[m.end():m.end()+100]
+                  n=m.group('lower'); years=vals[n] if n in vals else float(n.replace(',','.'))
+                  if m.group('unit').startswith(('месяц','month')): years/=12
+                  # An explicit preference must modify the duration itself, not a later skill.
+                  if re.search(r'(?:желательно|будет плюсом|nice to have|preferred)\s*[:—-]?\s*(?:опыт\s*(?:работы\s*)?)?(?:от\s*)?$',prefix) or re.match(r'\s*(?:опыта\s*)?(?:будет|является)\s+(?:плюсом|преимуществом)',suffix) or re.match(r'\s+(?:of\s+experience\s+)?(?:is\s+)?preferred\b',suffix):
+                      optional.append(years); continue
+                  over=bool(re.search(r'(?:более|свыше|больше|more than|over)\s*$',prefix))
+                  # Conservative: any duration above the limit is held, even if context is unclear.
+                  if years>2 or (years==2 and over):
+                      return 'REVIEW_3_PLUS', m.group(0)
+                  context=prefix[-100:]+' '+suffix[:65]
+                  if re.search(r'опыт|работал|работа|работаете|стаж|experience|worked|working|product manager|продакт|менеджер|аналитик|(?:от|минимум|at least)\s*$',context):
+                      found.append(years)
+              if found:
+                  return 'POSSIBLE_MATCH', f'{max(found):g} years'
+              if re.search(r'без опыта|опыт не обязателен|no experience required',text):
+                  return 'POSSIBLE_MATCH','0 years'
+              if optional: return 'UNKNOWN','Optional experience only'
+              return 'UNKNOWN','No reliable evidence'
 
+          def priority(title, description):
+              # Title and job description only; never infer B2C from employer name.
+              t = re.sub(r'\s+', ' ', (title + ' ' + description).lower().replace('ё','е'))
+              rules = {
+                  'B2C': r'\bb2c\b|consumer[- ](?:facing|product|app|market)|массов\w*\s+(?:рынок|аудитори\w*|продукт\w*)|(?:для|среди)\s+(?:частных лиц|физических лиц|физлиц|конечных потребител\w*)|потребительск\w*\s+(?:продукт\w*|сервис\w*|приложени\w*)',
+                  'Клиентский опыт (CX/UX)': r'клиентск\w*\s+(?:опыт\w*|путь|сценари\w*)|пользовательск\w*\s+(?:опыт\w*|путь|сценари\w*)|customer experience|user experience|customer journey|user journey|\bcjm\b|\b(?:cx|ux)\b|\b(?:nps|csat|ces)\b',
+                  'Активация и удержание': r'\bonboarding\b|онбординг\w*|\bretention\b|удержани\w*\s+пользовател\w*|активаци\w*\s+пользовател\w*|\bactivation\b|\bchurn\b|отток\w*\s+пользовател\w*|лояльност\w*\s+клиент\w*',
+                  'Клиентские сценарии': r'путь покупател\w*|оформлени\w*\s+заказ\w*|корзин\w*|\bcheckout\b|поиск\w*\s+товар\w*|персонализаци\w*|рекомендательн\w*\s+систем\w*|конверси\w*\s+(?:в покупку|в заказ|в оплату)|пользовательск\w*\s+воронк\w*',
+              }
+              tags=[]; evidence=[]
+              for label, pattern in rules.items():
+                  m=re.search(pattern,t)
+                  if m:
+                      tags.append(label); evidence.append(m.group(0))
+              business=bool(re.search(r'\bb2b\b|\bb2e\b|\benterprise\b|внутренн\w*\s+(?:продукт\w*|сервис\w*|платформ\w*|инструмент\w*)|корпоративн\w*\s+(?:клиент\w*|продукт\w*)',t))
+              explicit_b2c='B2C' in tags
+              cx='Клиентский опыт (CX/UX)' in tags
+              if business:
+                  level=1 if explicit_b2c or cx else 0
+              elif explicit_b2c or cx:
+                  level=2
+              elif tags:
+                  level=1
+              else:
+                  level=0
+              return level, tags, evidence, business
           history_path = Path('data/career_history.json')
           send_enabled = os.getenv('SEND_NOTIFICATIONS', '').lower() == 'true'
           history = json.loads(history_path.read_text()) if history_path.exists() else {'sent': []}
           sent = set(history['sent'])
           notifications = 0
           send_errors = 0
-          def notify(company, role, title, link, state, evidence):
-              global notifications, send_errors
-              if state == 'REVIEW_3_PLUS':
-                  print('HELD FOR EXPERIENCE REVIEW:', link)
-                  return
-              key = hashlib.sha256(canonical(link).encode()).hexdigest()
-              if key in sent:
-                  print('ALREADY SENT:', link)
-                  return
-              if not send_enabled:
-                  print('DRY RUN WOULD SEND:', link)
-                  return
-              token = os.environ.get('TELEGRAM_BOT_TOKEN', '')
-              chat = os.environ.get('TELEGRAM_CHAT_ID', '')
-              if not token or not chat:
-                  send_errors += 1
-                  print('TELEGRAM SECRETS MISSING')
-                  return
-              experience_label = ('По найденному требованию: ' + evidence if state == 'POSSIBLE_MATCH' else '⚠️ Требуемый опыт: уточнить')
-              message = ('Солнышко, тебе тут новая вакансия! 💗\n\n' + company + ' — ' + title + '\n' + role + '\n' + experience_label + '\nИсточник: публичный карьерный сайт\nРеферальный отклик: уточнить у сотрудника\n' + link)
-              try:
-                  payload = json.dumps({'chat_id': chat, 'text': message[:4000], 'disable_web_page_preview': True}).encode()
-                  req = urllib.request.Request('https://api.telegram.org/bot' + token + '/sendMessage', data=payload, headers={'Content-Type': 'application/json'})
-                  with urllib.request.urlopen(req, timeout=20) as response:
-                      result = json.load(response)
-                  if not result.get('ok'): raise RuntimeError('Telegram rejected message')
-                  sent.add(key)
-                  history_path.parent.mkdir(parents=True, exist_ok=True)
-                  history_path.write_text(json.dumps({'sent': sorted(sent)}, indent=2) + '\n')
-                  notifications += 1
-                  print('SENT:', link)
-                  time.sleep(1)
-              except Exception as e:
-                  send_errors += 1
-                  print('NOTIFICATION ERROR:', type(e).__name__)
+          def format_notification(company, role, title, state, evidence, ranking, source='career'):
+              esc = html.escape
+              level, tags, signals, business = ranking
+              lines = ['Котик, тут кое-что особенно интересное! 💕' if source == 'internal' else 'Солнышко, тебе тут новая вакансия! 💗', '', '<b>' + esc(company.upper()) + '</b>']
+              if source == 'internal': lines.append('🔒 <b>ВНУТРЕННЯЯ ВАКАНСИЯ (по сообщению источника)</b>')
+              if source == 'referral': lines.append('🤝 <b>РЕФЕРАЛЬНАЯ ВАКАНСИЯ (по сообщению источника)</b>')
+              if level == 2: lines.append('🔥 <b>ВЫСОКИЙ ПРИОРИТЕТ — B2C / CX</b>')
+              elif level == 1: lines.append('⭐ Возможный приоритет — уточнить контекст')
+              lines.extend(['', '<b>' + esc(title[:350]) + '</b>', '', '👤 Направление: ' + esc(role)])
+              match = re.fullmatch(r'([0-9.]+) years', evidence)
+              if state == 'POSSIBLE_MATCH' and match:
+                  n = float(match.group(1))
+                  exp = 'без опыта' if n == 0 else f'от {n*12:g} мес.' if n < 1 else f'от {n:g} ' + ('года' if n in (1,2) else 'лет')
+              else: exp = 'не подтверждён'
+              lines.extend(['', '📊 Опыт: ' + esc(exp)])
+              if tags: lines.extend(['', '🎯 Фокус: ' + esc(', '.join(tags))])
+              labels = {'career':'🌐 Тип: публичная вакансия', 'internal':'📢 Источник: переданная внутренняя вакансия', 'referral':'📢 Источник: переданная реферальная вакансия', 'linkedin':'📢 Источник: переданное уведомление LinkedIn', 'telegram':'📢 Источник: переданная публикация Telegram'}
+              lines.extend(['', labels.get(source,'📢 Источник: переданная вакансия'), '', '🤝 Свяжись со своим реферером и уточни возможность отклика.' if source in ('internal','referral') else '🤝 Реферальный отклик: уточнить'])
+              return '\n'.join(lines)
 
-          seen_jobs=set(); outcomes={}; reports=[]
+          def telegram_api(method, data):
+              token = os.environ.get('TELEGRAM_BOT_TOKEN','')
+              if not token: raise RuntimeError('Telegram token missing')
+              req = urllib.request.Request('https://api.telegram.org/bot'+token+'/'+method, data=json.dumps(data).encode(), headers={'Content-Type':'application/json'})
+              with urllib.request.urlopen(req,timeout=25) as response: result=json.load(response)
+              if not result.get('ok'): raise RuntimeError('Telegram rejected request')
+              return result['result']
+
+          def save_history():
+              history_path.parent.mkdir(parents=True,exist_ok=True)
+              history['sent']=sorted(sent)
+              history_path.write_text(json.dumps(history,indent=2)+'\n')
+
+          def notify(company, role, title, link, state, evidence, ranking, source='career'):
+              global notifications, send_errors
+              private = source != 'career'
+              if state != 'POSSIBLE_MATCH':
+                  print('HELD FOR EXPERIENCE REVIEW:',state, '' if private else link)
+                  return True
+              key=hashlib.sha256(canonical(link).encode()).hexdigest() if not private else hashlib.sha256(('submitted:'+company+':'+link+':'+title).encode()).hexdigest()
+              if key in sent: return True
+              if not send_enabled: return False
+              try:
+                  telegram_api('sendMessage', {'chat_id':os.environ['TELEGRAM_CHAT_ID'],'text':format_notification(company,role,title,state,evidence,ranking,source),'parse_mode':'HTML','disable_web_page_preview':True,'reply_markup':{'inline_keyboard':[[{'text':'Открыть источник вакансии' if private else 'Открыть вакансию','url':link}]]}})
+                  sent.add(key); save_history(); notifications+=1
+                  print('SENT:',source if private else link)
+                  time.sleep(1)
+                  return True
+              except Exception as e:
+                  send_errors+=1; print('NOTIFICATION ERROR:',type(e).__name__); return False
+
+          def parse_submission(text):
+              # Explicit structured submission from the owner's private chat only.
+              rows=text.splitlines()
+              if not rows or rows[0].strip().lower()!='/vacancy': return None
+              fields={}
+              for line in rows[1:]:
+                  k,sep,v=line.partition(':')
+                  if sep: fields[k.strip().lower()]=v.strip()
+              company=fields.get('компания','')
+              source=fields.get('источник','').lower()
+              title=fields.get('должность','')
+              link=fields.get('ссылка','')
+              desc=fields.get('описание','')
+              if company not in set(COMPANIES)|{'Авито'} or source not in ('internal','referral','linkedin','telegram') or not title or not desc: return None
+              u=urlparse(link)
+              if u.scheme!='https' or not u.hostname or u.username or u.password: return None
+              role=classify(title)
+              if not role: return None
+              state,evidence=experience(desc)
+              return (company,role,title,link,state,evidence,priority(title,desc),source)
+
+          def receive_submissions():
+              if not send_enabled: return
+              chat=os.environ.get('TELEGRAM_CHAT_ID','')
+              if not chat.isdigit(): print('SUBMISSIONS: private owner chat required'); return
+              try:
+                  updates=telegram_api('getUpdates',{'offset':int(history.get('telegram_offset',0)), 'timeout':0,'limit':100,'allowed_updates':['message']})
+                  for update in updates:
+                      msg=update.get('message',{}); c=msg.get('chat',{})
+                      if c.get('type')=='private' and str(c.get('id'))==chat and str(msg.get('from',{}).get('id'))==chat:
+                          text=msg.get('text','')
+                          if text.startswith('/vacancy'):
+                              job=parse_submission(text)
+                              if job:
+                                  if not notify(*job): break
+                                  if job[4]!='POSSIBLE_MATCH': telegram_api('sendMessage',{'chat_id':chat,'text':'Вакансия не отправлена в основную ленту: стаж выше лимита или не подтверждён.'})
+                              else: telegram_api('sendMessage',{'chat_id':chat,'text':'Не удалось принять вакансию: проверь формат, компанию и должность.'})
+                      history['telegram_offset']=update['update_id']+1; save_history()
+                  print('SUBMISSIONS CHECKED:',len(updates))
+              except Exception as e:
+                  print('SUBMISSION ERROR:',type(e).__name__)
+
+          seen_jobs=set(); outcomes={}; reports=[]; pending=[]
           MAX_PAGES=5
           MAX_DETAILS=30
 
@@ -492,11 +589,23 @@ jobs:
                           print('SERVICE UNVERIFIED:',link); continue
                       if company=='Wink' and not re.search(r'\bwink\b|винк',title+' '+link,re.I): continue
                       details+=1
+                      desc_text = ""
                       try:
                           _,detail,dp=get_page(link)
                           objects=list(job_objects(detail)); txt=' '.join(dp.text)
                           if objects:
-                              obj=objects[0]; desc=Parser(); desc.feed(str(obj.get('description') or '')); txt=' '.join(desc.text) or txt
+                              obj=objects[0]; actual_title=str(obj.get('title') or '').strip();
+                              if actual_title:
+                                  title=actual_title; role=classify(title)
+                                  if not role: continue
+                              desc=Parser(); desc.feed(str(obj.get('description') or '')); desc_text=' '.join(desc.text); txt=txt+' '+desc_text
+                          else:
+                              # Prefer an actual heading to the navigation/card tags.
+                              headings=re.findall(r'<h1\b[^>]*>(.*?)</h1\s*>',detail,re.I|re.S)
+                              for heading in headings:
+                                  hp=Parser(); hp.feed(heading); candidate=' '.join(hp.text).strip()
+                                  if classify(candidate): title=candidate; role=classify(candidate); break
+                              desc_text=txt
                           state,evidence=experience(txt)
                       except Exception as e:
                           state,evidence='UNKNOWN',type(e).__name__
@@ -504,8 +613,10 @@ jobs:
                       outcomes[key]=state
                       print('PRODUCT MATCH:',company,'|',role,'|',title,'|',link)
                       print('EXPERIENCE:',state,'|',evidence,'|',link)
+                      ranking=priority(title, desc_text)
+                      print('PRIORITY:',ranking[0],'|',', '.join(ranking[1]),'|',', '.join(ranking[2]),'|',link)
                       if source_type == 'career':
-                          notify(company, role, title, link, state, evidence)
+                          pending.append((company, role, title, link, state, evidence, ranking))
               if queue: print('PAGE LIMIT: coverage partial')
               print('SOURCE RESULT:',company,source_type,'pages',len(pages),'cards',len(cards),'new matches',matches,'errors',errors)
               reports.append((company,source_type,len(cards),matches,errors))
@@ -517,12 +628,43 @@ jobs:
           assert experience('Требуется опыт от трех лет')[0]=='REVIEW_3_PLUS'
           assert experience('Продуктовый опыт от 2 лет')[0]=='POSSIBLE_MATCH'
           assert canonical('https://example.com/job/123?utm_source=x') == 'https://example.com/job/123'
+          assert experience('Работали менеджером продукта 3–5 лет, желательно с AI/ML')[0]=='REVIEW_3_PLUS'
+          assert experience('Опыт 2–5 лет')[0]=='POSSIBLE_MATCH'
+          assert experience('Опыт 1–3 года')[0]=='POSSIBLE_MATCH'
+          assert experience('Опыт более двух лет')[0]=='REVIEW_3_PLUS'
+          assert experience('Опыт 2,5 года')[0]=='REVIEW_3_PLUS'
+          assert experience('Работали продактом три года')[0]=='REVIEW_3_PLUS'
+          assert experience('3+ years of experience')[0]=='REVIEW_3_PLUS'
+          assert experience('At least three years')[0]=='REVIEW_3_PLUS'
+          assert experience('Опыт от 3 лет будет преимуществом')[0]=='UNKNOWN'
+          assert experience('Без опыта')[0]=='POSSIBLE_MATCH'
+          assert experience('Опыт работы 6 месяцев')[0]=='POSSIBLE_MATCH'
+          assert experience('Описание недоступно')[0]=='UNKNOWN'
+          assert experience('Опыт от 2 лет. Работали аналитиком 3 года')[0]=='REVIEW_3_PLUS'
+          assert priority('Product Manager B2C','')[0]==2
+          assert priority('Менеджер продукта','Улучшать клиентский опыт')[0]==2
+          assert priority('Product Analyst','Customer journey and NPS')[0]==2
+          assert priority('Product Manager','Удержание пользователей и онбординг')[0]==1
+          assert priority('Product Manager','B2B enterprise customer experience')[0]==1
+          assert priority('Product Manager','B2B internal platform')[0]==0
+          assert priority('Product Manager','')[0]==0
+          assert priority('Product Manager B2C','B2B and B2C')[0]==1
+          assert classify('Аналитик данных с фокусом на AI в команду Trisigma') is None
+          assert classify('BI Product Analyst') is None
+          assert '<b>ЯНДЕКС</b>' in format_notification('Яндекс','Product Manager','A & B','POSSIBLE_MATCH','2 years',(2,['B2C'],[],False))
+          assert 'ВНУТРЕННЯЯ ВАКАНСИЯ' in format_notification('Яндекс','Product Manager','A','POSSIBLE_MATCH','2 years',(2,[],[],False),'internal')
+          assert parse_submission('/vacancy\nКомпания: Авито\nИсточник: internal\nДолжность: Product Manager\nСсылка: https://example.com/job\nОписание: Опыт от 2 лет')[4]=='POSSIBLE_MATCH'
           print('SELF TESTS PASSED')
+          receive_submissions()
           for company,config in COMPANIES.items():
               for source_type in SOURCE_TYPES:
                   for url in config[source_type]:
                       try: inspect_source(company,source_type,url)
                       except Exception as e: print('UNEXPECTED SOURCE ERROR:',company,type(e).__name__)
+          for job in sorted(pending, key=lambda job: job[-1][0], reverse=True):
+              notify(*job)
+          print('PRIORITY HIGH:',sum(job[-1][0]==2 for job in pending))
+          print('PRIORITY POSSIBLE:',sum(job[-1][0]==1 for job in pending))
           print('FINAL REPORT')
           for item in reports: print(*item,sep=' | ')
           print('UNIQUE PRODUCT MATCHES:',len(outcomes))
@@ -534,7 +676,7 @@ jobs:
           if send_errors: raise SystemExit(1)
           PY
       - name: Save public vacancy history
-        if: always() && inputs.send_notifications
+        if: always() && (github.event_name == 'schedule' || inputs.send_notifications)
         run: |
           if [ ! -f data/career_history.json ]; then exit 0; fi
           git config user.name 'github-actions[bot]'
@@ -542,5 +684,9 @@ jobs:
           git add data/career_history.json
           if git diff --cached --quiet; then exit 0; fi
           git commit -m 'Update public career vacancy history'
-          git pull --rebase origin main
-          git push origin HEAD:main
+          for attempt in 1 2 3; do
+            git pull --rebase origin main || exit 1
+            if git push origin HEAD:main; then exit 0; fi
+            sleep 5
+          done
+          exit 1
