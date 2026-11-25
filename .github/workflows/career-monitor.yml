@@ -19,8 +19,8 @@ on:
         type: boolean
         default: false
   schedule:
-    - cron: '19 * * * *'
-    - cron: '29,39,49,59 * * * *'
+    - cron: '19,49 * * * *'
+    - cron: '29,59 * * * *'
 permissions:
   contents: write
 concurrency:
@@ -41,7 +41,7 @@ jobs:
           LINKEDIN_RECORDS: ${{ inputs.linkedin_records }}
           LINKEDIN_ONLY: ${{ inputs.linkedin_only }}
           SEND_NOTIFICATIONS: ${{ github.event_name == 'schedule' || github.event_name == 'push' || inputs.send_notifications }}
-          COMMANDS_ONLY: ${{ github.event_name == 'push' || github.event.schedule == '29,39,49,59 * * * *' }}
+          COMMANDS_ONLY: ${{ github.event_name == 'push' || github.event.schedule == '29,59 * * * *' }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           AUTHORIZED_VACANCY_CHANNELS: ${{ vars.AUTHORIZED_VACANCY_CHANNELS }}
