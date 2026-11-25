@@ -216,6 +216,9 @@ jobs:
               rp = robot_cache[root]
               return rp is not None and rp.can_fetch(AGENT, url)
 
+          from radar_lifecycle import is_closed, vacancy_key, belongs_to_habr
+          from functools import lru_cache
+          @lru_cache(maxsize=32)
           def get_page(url):
               for _ in range(5):
                   if not allowed(url):
@@ -241,8 +244,7 @@ jobs:
               raise RuntimeError("Too many redirects")
 
           def canonical(url):
-              p = urlparse(url)
-              return urlunparse((p.scheme,p.netloc.lower(),p.path.rstrip('/'), '', '', ''))
+              return vacancy_key(url)
 
           def job_objects(body):
               def walk(obj):
@@ -321,7 +323,7 @@ jobs:
           sent=set(history.setdefault('sent',[]))
           BASE='https://career.avito.com'
           PAT=re.compile(r'/(?:publications|vacancies)/[^/]+/(?:\d+|[a-fA-F0-9-]{36})/?')
-          REVISION=11
+          REVISION=12
 
           def save():
               history['sent']=sorted(sent)
@@ -389,6 +391,8 @@ jobs:
                       role=classify(title)
                       desc=description(body,p) if role else ''
                       state,evidence=experience(desc)
+                      if is_closed(' '.join(p.text),list(job_objects(body))):
+                          state,evidence='CLOSED','Archived or expired'
                       ranking=priority(title,desc)
                       # Login wording is only a possible internal signal, not proof.
                       internal=bool(re.search(r'войдите как сотрудник|только для сотрудников|внутренняя вакансия',' '.join(p.text),re.I))
@@ -399,6 +403,7 @@ jobs:
                   other=Path('data/career_history.json')
                   other_sent=set(json.loads(other.read_text()).get('sent',[])) if other.exists() else set()
                   if not role or job_id in sent or identity_keys('Авито',url).intersection(other_sent): continue
+                  if job.get('state')=='CLOSED': continue
                   if job.get('state')!='POSSIBLE_MATCH':
                       held+=1; print('HELD:',job.get('state'),job['title']); continue
                   pending.append((job['ranking'][0],job_id,url,job,role))
