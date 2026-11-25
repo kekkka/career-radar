@@ -392,6 +392,9 @@ jobs:
               rp = robot_cache[root]
               return rp is not None and rp.can_fetch(AGENT, url)
 
+          from radar_lifecycle import is_closed, vacancy_key, belongs_to_habr
+          from functools import lru_cache
+          @lru_cache(maxsize=32)
           def get_page(url):
               for _ in range(5):
                   if not allowed(url):
@@ -417,8 +420,7 @@ jobs:
               raise RuntimeError("Too many redirects")
 
           def canonical(url):
-              p = urlparse(url)
-              return urlunparse((p.scheme,p.netloc.lower(),p.path.rstrip('/'), '', '', ''))
+              return vacancy_key(url)
 
           def job_objects(body):
               def walk(obj):
@@ -615,7 +617,7 @@ jobs:
 
           def inspect_source(company, source_type, url):
               print('\nCOMPANY:',company,'SOURCE:',source_type,'URL:',url)
-              queue=deque([url]); pages=set(); cards=set(); matches=0; errors=0; details=0
+              queue=deque([url]); pages=set(); cards=set(); matches=0; errors=0; details=0; limited=False
               while queue and len(pages)<MAX_PAGES:
                   current=queue.popleft()
                   if current in pages: continue
@@ -641,7 +643,7 @@ jobs:
                       role=classify(title)
                       if not role or key in seen_jobs: continue
                       if details>=MAX_DETAILS:
-                          print('DETAIL LIMIT:',link); continue
+                          limited=True; print('DETAIL LIMIT:',link); continue
                       if company=='Кинопоиск' and not re.search(r'кинопоиск|kinopoisk',title+' '+link,re.I):
                           print('SERVICE UNVERIFIED:',link); continue
                       if company=='Самокат' and urlparse(link).hostname in ('ecom.tech','samokat.tech') and not re.search(r'самокат|samokat',title+' '+link,re.I):
@@ -652,6 +654,9 @@ jobs:
                       try:
                           _,detail,dp=get_page(link)
                           objects=list(job_objects(detail)); txt=' '.join(dp.text)
+                          if is_closed(txt,objects):
+                              outcomes[key]='CLOSED'; seen_jobs.add(key)
+                              print('CLOSED VACANCY:',link); continue
                           if objects:
                               obj=objects[0]; actual_title=str(obj.get('title') or '').strip();
                               if actual_title:
@@ -667,6 +672,7 @@ jobs:
                               desc_text=txt
                           state,evidence=experience(desc_text)
                       except Exception as e:
+                          errors+=1
                           state,evidence='UNKNOWN',type(e).__name__
                       seen_jobs.add(key); matches+=1
                       outcomes[key]=state
@@ -678,7 +684,7 @@ jobs:
                           pending.append((company, role, title, link, state, evidence, ranking))
               if queue: print('PAGE LIMIT: coverage partial')
               print('SOURCE RESULT:',company,source_type,'pages',len(pages),'cards',len(cards),'new matches',matches,'errors',errors)
-              health[source_id(company,source_type,url)]=source_status(len(pages),len(cards),errors,bool(queue))
+              health[source_id(company,source_type,url)]=source_status(len(pages),len(cards),errors,bool(queue) or limited)
               reports.append((company,source_type,len(cards),matches,errors))
 
           assert classify('Junior Product Manager')=='Product Manager'
@@ -758,7 +764,7 @@ jobs:
           print('FINAL REPORT')
           for item in reports: print(*item,sep=' | ')
           print('UNIQUE PRODUCT MATCHES:',len(outcomes))
-          for status in ('POSSIBLE_MATCH','UNKNOWN','REVIEW_3_PLUS'):
+          for status in ('POSSIBLE_MATCH','UNKNOWN','REVIEW_3_PLUS','CLOSED'):
               print(status, sum(v==status for v in outcomes.values()))
           print('NOTIFICATIONS SENT:', notifications)
           for company in COMPANIES:
