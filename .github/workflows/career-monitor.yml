@@ -256,6 +256,88 @@ jobs:
               except Exception:
                   return False
 
+          
+          def is_vacancy(url):
+              parsed = urlparse(url)
+              host = parsed.netloc.lower()
+              path = parsed.path.rstrip("/")
+
+              if host == "yandex.ru":
+                  return bool(re.fullmatch(
+                      r"/jobs/vacancies/[^/]+-\d+",
+                      path
+                  ))
+
+              if host in (
+                  "aviasales.ru",
+                  "www.aviasales.ru"
+              ):
+                  return bool(re.fullmatch(
+                      r"/about/vacancies/\d+",
+                      path
+                  ))
+
+              if host in (
+                  "vkusvill.ru",
+                  "www.vkusvill.ru"
+              ):
+                  return bool(re.fullmatch(
+                      r"/job/vacancys/[^/]+\.html",
+                      path
+                  ))
+
+              return False
+
+          def classify(title):
+              text = title.lower().replace("ё", "е")
+              text = re.sub(r"[-–—]", " ", text)
+
+              exclude = (
+                  r"\bsenior\b|\blead\b|\bhead\b|"
+                  r"\bprincipal\b|\bstaff\b|"
+                  r"старший|ведущий|руководитель|"
+                  r"product marketing|"
+                  r"продуктов\w* маркетолог|"
+                  r"product design|дизайнер|"
+                  r"developer|разработчик|"
+                  r"data engineer|"
+                  r"data analyst|аналитик данных|"
+                  r"business analyst|бизнес аналитик|"
+                  r"system analyst|системный аналитик|"
+                  r"project manager|менеджер проектов"
+              )
+
+              if re.search(exclude, text):
+                  return None
+
+              analyst = (
+                  r"product analy(?:st|tics)|"
+                  r"продуктов\w* аналитик|"
+                  r"аналитик\w* продукт|"
+                  r"аналитик\w* по продукт"
+              )
+
+              manager = (
+                  r"product manager|"
+                  r"product owner|"
+                  r"product management|"
+                  r"product intern|"
+                  r"продакт|"
+                  r"менеджер\w* продукта|"
+                  r"менеджер\w* по продукт|"
+                  r"продуктов\w* менеджер|"
+                  r"менеджер\w* по развитию продукта|"
+                  r"владелец продукта|\bapm\b"
+              )
+
+              if re.search(analyst, text):
+                  return "Product Analyst"
+
+              if re.search(manager, text):
+                  return "Product Manager"
+
+              return None
+          
           def inspect_source(company, source_type, url):
               print("\n" + "=" * 60)
               print("COMPANY:", company)
@@ -295,8 +377,41 @@ jobs:
                   print("TOTAL LINKS:", len(parser.links))
                   print("CANDIDATE LINKS:", len(found))
 
+                  
                   for link, title in sorted(found):
                       print("LINK:", title, "|", link)
+
+                  vacancy_count = 0
+                  product_count = 0
+
+                  for href, title in parser.links:
+                      link = urljoin(final_url, href)
+
+                      if not is_vacancy(link):
+                          continue
+
+                      vacancy_count += 1
+
+                      role = classify(title)
+
+                      if not role:
+                          continue
+
+                      product_count += 1
+
+                      print(
+                          "PRODUCT MATCH:",
+                          company,
+                          "|",
+                          role,
+                          "|",
+                          title,
+                          "|",
+                          link
+                      )
+
+                  print("VACANCY CARDS:", vacancy_count)
+                  print("PRODUCT MATCHES:", product_count)
 
                   print("RELEVANT TEXT:")
 
