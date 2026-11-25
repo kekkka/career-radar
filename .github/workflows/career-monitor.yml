@@ -1,26 +1,17 @@
-
 name: Career Monitor
-
 on:
   workflow_dispatch:
-
 permissions:
   contents: read
-
 concurrency:
   group: career-monitor
   cancel-in-progress: false
-
 jobs:
   monitor:
     runs-on: ubuntu-latest
     timeout-minutes: 30
-
     steps:
-      - name: Download project
-        uses: actions/checkout@v4
-
-      - name: Check career sources
+      - name: Check career sources V0.4
         env:
           PYTHONUNBUFFERED: "1"
         run: |
@@ -30,6 +21,9 @@ jobs:
           import urllib.robotparser
           import re
           import time
+          import json
+          from collections import deque
+          from urllib.parse import parse_qs, urlunparse, urlencode
           from html.parser import HTMLParser
           from urllib.parse import urljoin, urlparse
 
@@ -122,10 +116,10 @@ jobs:
               }
           }
 
-          
+
           # Updated sources after diagnostics
 
-          
+
           COMPANIES["Яндекс"]["career"] = [
               "https://yandex.ru/jobs/vacancies",
               "https://yandex.ru/jobs/vacancies?professions=product-manager",
@@ -156,7 +150,13 @@ jobs:
           ]
 
 
-          
+
+          # Alternative public sources (availability still to be tested)
+          COMPANIES["Самокат"]["career"].append("https://samokat.tech/vacancies")
+          COMPANIES["Циан"]["career"].append("https://cian.huntflow.io/")
+          COMPANIES["Точка"]["career"].append("https://hr.tochka.com/vacancies/")
+          COMPANIES["Т-Банк"]["career"].append("https://www.tbank.ru/career/it/product-analytics/")
+
           SOURCE_TYPES = [
               "career",
               "internal",
@@ -219,52 +219,6 @@ jobs:
               re.IGNORECASE
           )
 
-          def fetch(url):
-              request = urllib.request.Request(
-                  url,
-                  headers={"User-Agent": AGENT}
-              )
-
-              with urllib.request.urlopen(
-                  request,
-                  timeout=20
-              ) as response:
-                  body = response.read(
-                      8 * 1024 * 1024
-                  ).decode(
-                      "utf-8",
-                      errors="replace"
-                  )
-
-                  return (
-                      response.status,
-                      response.geturl(),
-                      body
-                  )
-
-          def check_robots(url):
-              parsed = urlparse(url)
-              base = parsed.scheme + "://" + parsed.netloc
-
-              robots = urllib.robotparser.RobotFileParser()
-              robots.set_url(base + "/robots.txt")
-
-              try:
-                  _, _, body = fetch(base + "/robots.txt")
-                  robots.parse(body.splitlines())
-
-                  return robots.can_fetch(AGENT, url)
-
-              except urllib.error.HTTPError as error:
-                  if error.code == 404:
-                      return True
-
-                  return False
-
-              except Exception:
-                  return False
-
-          
           def is_vacancy(url):
               parsed = urlparse(url)
               host = parsed.netloc.lower()
@@ -294,11 +248,15 @@ jobs:
                       path
                   ))
 
+              if host == "hr.tochka.com":
+                  return bool(re.fullmatch(r"/vacancies/catalog/[^/]+", path))
+              if host in ("tbank.ru", "www.tbank.ru"):
+                  return bool(re.fullmatch(r"/career/it/vacancy/.+/[0-9a-f-]{36}", path))
               return False
 
           def classify(title):
               text = title.lower().replace("ё", "е")
-              text = re.sub(r"[-–—]", " ", text)
+              text = re.sub(r"[-–—‑−]", " ", text)
 
               exclude = (
                   r"\bsenior\b|\blead\b|\bhead\b|"
@@ -328,7 +286,7 @@ jobs:
               manager = (
                   r"product manager|"
                   r"product owner|"
-                  r"product management|"
+                  r"product management intern|"
                   r"product intern|"
                   r"продакт|"
                   r"менеджер\w* продукта|"
@@ -346,235 +304,170 @@ jobs:
 
               return None
 
-          
-          def inspect_experience(url):
-              try:
-                  if not check_robots(url):
-                      return "UNKNOWN", "Access restricted"
-
-                  time.sleep(3)
-
-                  status, final_url, body = fetch(url)
-
-                  parser = Parser()
-                  parser.feed(body)
-
-                  text = " ".join(parser.text)
-                  text = text.lower().replace("ё", "е")
-
-                  text = re.sub(r"\s+", " ", text)
-
-                  patterns = [
-                      r"(?:от|не менее|минимум)\s*(\d+)\s*(?:года?|лет)",
-                      r"(?:опыт работы|опыт)\s*(?:от|:)?\s*(\d+)\s*(?:года?|лет)",
-                      r"(\d+)\s*\+?\s*(?:years?)\s+of\s+experience",
-                      r"(?:at least|minimum of)\s*(\d+)\s*(?:years?)"
-                  ]
-
-                  matches = []
-
-                  for pattern in patterns:
-                      for match in re.finditer(pattern, text):
-                          years = int(match.group(1))
-                          matches.append(years)
-
-                          print(
-                              "EXPERIENCE EVIDENCE:",
-                              text[max(0, match.start()-90):
-                                   match.end()+90]
-                          )
-
-                  if not matches:
-                      return "UNKNOWN", "Experience not found"
-
-                  if max(matches) >= 3:
-                      return "REVIEW", "Possible 3+ years requirement"
-
-                  return "POSSIBLE MATCH", str(min(matches)) + " years"
-
-              except Exception as error:
-                  return "UNKNOWN", type(error).__name__
 
 
-          
+          # No cookies, login, access bypass or scraping of LinkedIn.
+          # Check robots before each redirect and fail closed on unknown policy.
+          robot_cache = {}
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self, req, fp, code, msg, headers, newurl):
+                  return None
+          opener = urllib.request.build_opener(NoRedirect())
+
+          def raw(url):
+              req = urllib.request.Request(url, headers={"User-Agent": AGENT})
+              with opener.open(req, timeout=20) as response:
+                  return response.read(8*1024*1024).decode("utf-8", errors="replace")
+
+          def allowed(url):
+              p = urlparse(url)
+              if p.scheme != "https" or not p.hostname or p.username:
+                  return False
+              root = p.scheme + "://" + p.netloc
+              if root not in robot_cache:
+                  rp = urllib.robotparser.RobotFileParser()
+                  try:
+                      rp.parse(raw(root + "/robots.txt").splitlines())
+                  except urllib.error.HTTPError as e:
+                      if e.code == 404:
+                          rp.parse([])
+                      else:
+                          rp = None
+                  except Exception:
+                      rp = None
+                  robot_cache[root] = rp
+              rp = robot_cache[root]
+              return rp is not None and rp.can_fetch(AGENT, url)
+
+          def get_page(url):
+              for _ in range(5):
+                  if not allowed(url):
+                      raise RuntimeError("ROBOTS RESTRICTED OR UNVERIFIED")
+                  rp = robot_cache[urlparse(url).scheme + "://" + urlparse(url).netloc]
+                  delay = rp.crawl_delay(AGENT) or rp.crawl_delay("*") or 3
+                  rate = rp.request_rate(AGENT) or rp.request_rate("*")
+                  if rate:
+                      delay = max(delay, rate.seconds / rate.requests)
+                  if delay > 30:
+                      raise RuntimeError("CRAWL DELAY exceeds test budget")
+                  time.sleep(max(3, delay))
+                  try:
+                      body = raw(url)
+                      parser = Parser()
+                      parser.feed(body)
+                      return url, body, parser
+                  except urllib.error.HTTPError as e:
+                      if e.code in (301,302,303,307,308) and e.headers.get("Location"):
+                          url = urljoin(url, e.headers["Location"])
+                          continue
+                      raise
+              raise RuntimeError("Too many redirects")
+
+          def canonical(url):
+              p = urlparse(url)
+              return urlunparse((p.scheme,p.netloc.lower(),p.path.rstrip('/'), '', '', ''))
+
+          def job_objects(body):
+              def walk(obj):
+                  if isinstance(obj, list):
+                      for v in obj: yield from walk(v)
+                  elif isinstance(obj, dict):
+                      types = obj.get('@type', [])
+                      if types == 'JobPosting' or isinstance(types,list) and 'JobPosting' in types:
+                          yield obj
+                      for v in obj.values():
+                          if isinstance(v,(dict,list)): yield from walk(v)
+              for m in re.finditer(r'<script\b[^>]*type=["\']application/ld\+json["\'][^>]*>(.*?)</script\s*>', body, re.I|re.S):
+                  try: yield from walk(json.loads(m.group(1)))
+                  except (ValueError,TypeError): continue
+
+          def experience(text):
+              text = re.sub(r'\s+', ' ', text.lower().replace('ё','е'))
+              num = r'(\d+|одного|двух|трех|четырех|пяти|шести|семи|one|two|three|four|five|six)'
+              vals={'одного':1,'двух':2,'трех':3,'четырех':4,'пяти':5,'шести':6,'семи':7,'one':1,'two':2,'three':3,'four':4,'five':5,'six':6}
+              patterns=[r'(?:опыт(?:а|ом)?[^.!?]{0,55}?(?:от|не менее|минимум)|(?:от|не менее|минимум))\s*'+num+r'\s*(?:года?|лет)',num+r'\s*\+?\s*years?\s+(?:of\s+)?(?:relevant\s+|professional\s+)?experience',r'(?:at least|minimum(?: of)?)\s*'+num+r'\s*years?',r'опыт(?: работы)?\s*:?\s*'+num+r'\s*(?:года?|лет)']
+              found=[]
+              for pat in patterns:
+                  for m in re.finditer(pat,text):
+                      n=m.group(1); years=int(n) if n.isdigit() else vals[n]
+                      context=text[max(0,m.start()-70):m.end()+45]
+                      found.append((years,context))
+              if not found:
+                  if re.search(r'без опыта|опыт не обязателен|no experience required',text): return 'POSSIBLE_MATCH', '0 years'
+                  return 'UNKNOWN','No reliable evidence'
+              for n,c in dict.fromkeys(found): print('EXPERIENCE EVIDENCE:',n,c)
+              if any(n>=3 for n,c in found): return 'REVIEW_3_PLUS', 'Check mandatory vs optional'
+              return 'POSSIBLE_MATCH', str(max(n for n,c in found))+' years'
+
+          seen_jobs=set(); outcomes={}; reports=[]
+          MAX_PAGES=5
+          MAX_DETAILS=30
+
           def inspect_source(company, source_type, url):
-              print("\n" + "=" * 60)
-              print("COMPANY:", company)
-              print("SOURCE TYPE:", source_type)
-              print("URL:", url)
+              print('\nCOMPANY:',company,'SOURCE:',source_type,'URL:',url)
+              queue=deque([url]); pages=set(); cards=set(); matches=0; errors=0; details=0
+              while queue and len(pages)<MAX_PAGES:
+                  current=queue.popleft()
+                  if current in pages: continue
+                  pages.add(current)
+                  try: final, body, parser=get_page(current)
+                  except Exception as e:
+                      print('SOURCE ERROR:',type(e).__name__,str(e)[:180]); errors+=1; continue
+                  print('PAGE:',final,'LINKS:',len(parser.links))
+                  candidates=[]
+                  for href,title in parser.links:
+                      full=urljoin(final,href)
+                      p=urlparse(full); f=urlparse(final)
+                      if p.scheme!='https': continue
+                      if is_vacancy(full): candidates.append((full,title))
+                      if p.netloc==f.netloc and p.path.rstrip('/')==f.path.rstrip('/') and any(re.fullmatch(r'(?:page|pagen_\d+|p|offset)',k,re.I) for k in parse_qs(p.query)) and full not in pages:
+                          queue.append(full)
+                      if KEYWORDS.search(full+' '+title): print('LINK:',title[:160],'|',full)
+                  for obj in job_objects(body):
+                      link=urljoin(final,str(obj.get('url') or final)); title=str(obj.get('title') or '')
+                      if urlparse(link).netloc==urlparse(final).netloc and title: candidates.append((link,title))
+                  for link,title in candidates:
+                      key=canonical(link); cards.add(key)
+                      role=classify(title)
+                      if not role or key in seen_jobs: continue
+                      if details>=MAX_DETAILS:
+                          print('DETAIL LIMIT:',link); continue
+                      if company=='Кинопоиск' and not re.search(r'кинопоиск|kinopoisk',title+' '+link,re.I):
+                          print('SERVICE UNVERIFIED:',link); continue
+                      if company=='Wink' and not re.search(r'\bwink\b|винк',title+' '+link,re.I): continue
+                      details+=1
+                      try:
+                          _,detail,dp=get_page(link)
+                          objects=list(job_objects(detail)); txt=' '.join(dp.text)
+                          if objects:
+                              obj=objects[0]; txt=str(obj.get('description') or txt)
+                          state,evidence=experience(txt)
+                      except Exception as e:
+                          state,evidence='UNKNOWN',type(e).__name__
+                      seen_jobs.add(key); matches+=1
+                      outcomes[key]=state
+                      print('PRODUCT MATCH:',company,'|',role,'|',title,'|',link)
+                      print('EXPERIENCE:',state,'|',evidence,'|',link)
+              if queue: print('PAGE LIMIT: coverage partial')
+              print('SOURCE RESULT:',company,source_type,'pages',len(pages),'cards',len(cards),'new matches',matches,'errors',errors)
+              reports.append((company,source_type,len(cards),matches,errors))
 
-              try:
-                  if not check_robots(url):
-                      return "RESTRICTED OR UNVERIFIED", 0
-
-                  time.sleep(3)
-
-                  status, final_url, body = fetch(url)
-
-                  if not check_robots(final_url):
-                      return "REDIRECT RESTRICTED", 0
-
-                  parser = Parser()
-                  parser.feed(body)
-
-                  found = set()
-
-                  for href, title in parser.links:
-                      full = urljoin(final_url, href)
-
-                      if urlparse(full).scheme not in (
-                          "http", "https"
-                      ):
-                          continue
-
-                      if KEYWORDS.search(full + " " + title):
-                          found.add((full, title[:200]))
-
-                  print("HTTP STATUS:", status)
-                  print("FINAL URL:", final_url)
-                  print("HTML SIZE:", len(body))
-                  print("TOTAL LINKS:", len(parser.links))
-                  print("CANDIDATE LINKS:", len(found))
-
-                  
-                  for link, title in sorted(found):
-                      print("LINK:", title, "|", link)
-
-                  vacancy_count = 0
-                  product_count = 0
-
-                  for href, title in parser.links:
-                      link = urljoin(final_url, href)
-
-                      if not is_vacancy(link):
-                          continue
-
-                      vacancy_count += 1
-
-                      role = classify(title)
-
-                      if not role:
-                          continue
-
-                      product_count += 1
-
-                      experience_status, experience_details = (
-                          inspect_experience(link)
-                      )
-
-                      print(
-                          "EXPERIENCE:",
-                          experience_status,
-                          "|",
-                          experience_details,
-                          "|",
-                          link
-                      )
-
-
-
-                      print(
-                          "PRODUCT MATCH:",
-                          company,
-                          "|",
-                          role,
-                          "|",
-                          title,
-                          "|",
-                          link
-                      )
-
-                  print("VACANCY CARDS:", vacancy_count)
-                  print("PRODUCT MATCHES:", product_count)
-
-                  print("RELEVANT TEXT:")
-
-                  snippets = [
-                      line for line in parser.text
-                      if KEYWORDS.search(line)
-                  ]
-
-                  for line in snippets[:15]:
-                      print(line[:250])
-
-                  if found:
-                      return "AVAILABLE", len(found)
-
-                  return "NEEDS JS OR OTHER SOURCE", 0
-
-              except Exception as error:
-                  print(
-                      "ERROR:",
-                      type(error).__name__,
-                      str(error)[:200]
-                  )
-
-                  return "NEEDS SEPARATE INTEGRATION", 0
-
-          results = []
-
-          print("CAREER RADAR")
-          print("MODE: DIAGNOSTICS")
-          print("TOTAL COMPANIES:", len(COMPANIES))
-
-          for index, (company, config) in enumerate(
-              COMPANIES.items(),
-              start=1
-          ):
-              print(
-                  "\nCOMPANY PROGRESS:",
-                  f"{index}/{len(COMPANIES)}"
-              )
-
+          assert classify('Junior Product Manager')=='Product Manager'
+          assert classify('Продуктовый аналитик')=='Product Analyst'
+          assert classify('Data Analyst') is None
+          assert classify('Senior Product Manager') is None
+          assert experience('Требуется опыт от трех лет')[0]=='REVIEW_3_PLUS'
+          assert experience('Продуктовый опыт от 2 лет')[0]=='POSSIBLE_MATCH'
+          print('SELF TESTS PASSED')
+          for company,config in COMPANIES.items():
               for source_type in SOURCE_TYPES:
                   for url in config[source_type]:
-                      status, count = inspect_source(
-                          company,
-                          source_type,
-                          url
-                      )
-
-                      results.append({
-                          "company": company,
-                          "source": source_type,
-                          "status": status,
-                          "links": count
-                      })
-
-          print("\n" + "=" * 60)
-          print("FINAL REPORT")
-          print("=" * 60)
-
-          for item in results:
-              print(
-                  item["company"],
-                  "|",
-                  item["source"],
-                  "|",
-                  item["status"],
-                  "| links:",
-                  item["links"]
-              )
-
-          available = sum(
-              item["status"] == "AVAILABLE"
-              for item in results
-          )
-
-          print("\nTOTAL COMPANIES:", len(COMPANIES))
-          print("CHECKED SOURCES:", len(results))
-          print("AVAILABLE SOURCES:", available)
-          print("NEED ADDITIONAL WORK:", len(results) - available)
-
-          print("\nSOURCE CONFIGURATION:")
-
-          for source_type in SOURCE_TYPES:
-              count = sum(
-                  len(config[source_type])
-                  for config in COMPANIES.values()
-              )
-
-              print(source_type.upper(), ":", count)
-
-          print("\nDIAGNOSTICS COMPLETED")
+                      try: inspect_source(company,source_type,url)
+                      except Exception as e: print('UNEXPECTED SOURCE ERROR:',company,type(e).__name__)
+          print('FINAL REPORT')
+          for item in reports: print(*item,sep=' | ')
+          print('UNIQUE PRODUCT MATCHES:',len(outcomes))
+          for status in ('POSSIBLE_MATCH','UNKNOWN','REVIEW_3_PLUS'):
+              print(status, sum(v==status for v in outcomes.values()))
+          print('DIAGNOSTICS COMPLETED')
           PY
