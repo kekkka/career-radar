@@ -11,6 +11,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Test quality helpers
         run: python3 -m unittest discover -s tests -v
+      - name: Gmail connector fixtures
+        run: node -e "require('./gmail_connector.js').testFixtures()"
       - name: Compile embedded Python
         run: |
           python3 - <<'PY'
