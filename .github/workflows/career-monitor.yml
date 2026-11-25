@@ -30,7 +30,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Offline quality tests
         run: python3 -m unittest discover -s tests -v
-      - name: Check career sources V1.2
+      - name: Check career sources V1.4
         env:
           PYTHONUNBUFFERED: "1"
           LINKEDIN_RECORDS: ${{ inputs.linkedin_records }}
@@ -193,6 +193,18 @@ jobs:
           COMPANIES["Dodo Brands"]["career"].extend(["https://career.habr.com/companies/dododev","https://career.habr.com/companies/dodobrands"])
           COMPANIES["Skyeng"]["career"].extend(["https://job.skyeng.ru/vacancies-dev","https://vacancies.skyeng.ru/?ch=site","https://career.habr.com/companies/skyeng"])
 
+          # Employer profiles confirmed by public search; permission checked on every fetch.
+          COMPANIES["Т-Банк"]["career"].append("https://career.habr.com/companies/tbank")
+          COMPANIES["Точка"]["career"].append("https://career.habr.com/companies/bank-tochka")
+          COMPANIES["ЕАПТЕКА"]["career"].append("https://career.habr.com/companies/eapteka")
+          COMPANIES["START"]["career"].append("https://career.habr.com/companies/startfilm")
+          COMPANIES["Wink"]["career"].append("https://career.habr.com/companies/wink")
+          COMPANIES["Самокат"]["career"].append("https://career.habr.com/companies/ecom-tech")
+          # Aggregator listings are discovery only until the detail verifies employer and experience.
+          COMPANIES["Т-Банк"]["career"].append("https://vacario.ru/company/tbank")
+          COMPANIES["Точка"]["career"].append("https://vacario.ru/company/tochka")
+          COMPANIES["Кинопоиск"]["career"].append("https://vacario.ru/company/yandex")
+          COMPANIES["Точка"]["aliases"].append("Точка Банк")
           # Public source registry: discovery is not proof of permission or coverage.
           # No LinkedIn scraping; use official email alerts or explicitly submitted vacancies.
           CHANNELS = {
@@ -298,6 +310,8 @@ jobs:
                       path
                   ))
 
+              if host == "vacario.ru":
+                  return bool(re.fullmatch(r"/(?:management|analytics|analysis|data|development|other)/[^/]+-\d+",path))
               if host == "career.habr.com":
                   return bool(re.fullmatch(r"/vacancies/\d+",path))
               if host == "vacancies.skyeng.ru":
@@ -657,15 +671,21 @@ jobs:
                           limited=True; print('DETAIL LIMIT:',link); continue
                       if company=='Кинопоиск' and not re.search(r'кинопоиск|kinopoisk',title+' '+link,re.I):
                           print('SERVICE UNVERIFIED:',link); continue
-                      if company=='Самокат' and urlparse(link).hostname in ('ecom.tech','samokat.tech') and not re.search(r'самокат|samokat',title+' '+link,re.I):
+                      if company=='Самокат' and urlparse(link).hostname in ('ecom.tech','samokat.tech','career.habr.com') and not re.search(r'самокат|samokat',title+' '+link,re.I):
                           print('SERVICE UNVERIFIED:',link); continue
-                      if company=='Wink' and not re.search(r'\bwink\b|винк',title+' '+link,re.I): continue
+                      if company=='Wink' and urlparse(link).hostname!='career.habr.com' and not re.search(r'\bwink\b|винк',title+' '+link,re.I): continue
                       details+=1
                       desc_text = ""
                       try:
                           _,detail,dp=get_page(link)
                           objects=list(job_objects(detail)); txt=' '.join(dp.text)
-                          if urlparse(link).hostname=='career.habr.com' and not belongs_to_habr(objects,COMPANIES[company]['aliases']):
+                          source_host=urlparse(link).hostname
+                          aliases=COMPANIES[company]['aliases']
+                          if company=='Самокат' and source_host=='career.habr.com' and re.search(r'самокат|samokat',title,re.I):
+                              aliases=aliases+['Ecom.tech','Ecom Tech']
+                          if company=='Кинопоиск' and source_host=='vacario.ru' and re.search(r'кинопоиск|kinopoisk',title,re.I):
+                              aliases=aliases+['Яндекс','Yandex']
+                          if source_host in ('career.habr.com','vacario.ru') and not belongs_to_habr(objects,aliases):
                               limited=True; print('EMPLOYER UNVERIFIED:',link); continue
                           if is_closed(txt,objects):
                               outcomes[key]='CLOSED'; seen_jobs.add(key)
