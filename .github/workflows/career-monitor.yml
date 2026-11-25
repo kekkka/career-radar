@@ -1,8 +1,13 @@
 name: Career Monitor
 on:
   workflow_dispatch:
+    inputs:
+      send_notifications:
+        description: 'Send public vacancy notifications to Telegram'
+        type: boolean
+        default: false
 permissions:
-  contents: read
+  contents: write
 concurrency:
   group: career-monitor
   cancel-in-progress: false
@@ -11,9 +16,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - name: Check career sources V0.4
+      - uses: actions/checkout@v4
+      - name: Check career sources V0.5
         env:
           PYTHONUNBUFFERED: "1"
+          SEND_NOTIFICATIONS: ${{ inputs.send_notifications }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           python3 -u - <<'PY'
           import urllib.request
@@ -22,6 +31,9 @@ jobs:
           import re
           import time
           import json
+          import os
+          import hashlib
+          from pathlib import Path
           from collections import deque
           from urllib.parse import parse_qs, urlunparse, urlencode
           from html.parser import HTMLParser
@@ -332,8 +344,10 @@ jobs:
                       if e.code == 404:
                           rp.parse([])
                       else:
+                          print("ROBOTS HTTP STATUS:", root, e.code)
                           rp = None
-                  except Exception:
+                  except Exception as e:
+                      print("ROBOTS FETCH ERROR:", root, type(e).__name__)
                       rp = None
                   robot_cache[root] = rp
               rp = robot_cache[root]
@@ -399,6 +413,48 @@ jobs:
               if any(n>=3 for n,c in found): return 'REVIEW_3_PLUS', 'Check mandatory vs optional'
               return 'POSSIBLE_MATCH', str(max(n for n,c in found))+' years'
 
+          history_path = Path('data/career_history.json')
+          send_enabled = os.getenv('SEND_NOTIFICATIONS', '').lower() == 'true'
+          history = json.loads(history_path.read_text()) if history_path.exists() else {'sent': []}
+          sent = set(history['sent'])
+          notifications = 0
+          send_errors = 0
+          def notify(company, role, title, link, state, evidence):
+              global notifications, send_errors
+              if state == 'REVIEW_3_PLUS':
+                  print('HELD FOR EXPERIENCE REVIEW:', link)
+                  return
+              key = hashlib.sha256(canonical(link).encode()).hexdigest()
+              if key in sent:
+                  print('ALREADY SENT:', link)
+                  return
+              if not send_enabled:
+                  print('DRY RUN WOULD SEND:', link)
+                  return
+              token = os.environ.get('TELEGRAM_BOT_TOKEN', '')
+              chat = os.environ.get('TELEGRAM_CHAT_ID', '')
+              if not token or not chat:
+                  send_errors += 1
+                  print('TELEGRAM SECRETS MISSING')
+                  return
+              experience_label = ('По найденному требованию: ' + evidence if state == 'POSSIBLE_MATCH' else '⚠️ Требуемый опыт: уточнить')
+              message = ('Солнышко, тебе тут новая вакансия! 💗\n\n' + company + ' — ' + title + '\n' + role + '\n' + experience_label + '\nИсточник: публичный карьерный сайт\nРеферальный отклик: уточнить у сотрудника\n' + link)
+              try:
+                  payload = json.dumps({'chat_id': chat, 'text': message[:4000], 'disable_web_page_preview': True}).encode()
+                  req = urllib.request.Request('https://api.telegram.org/bot' + token + '/sendMessage', data=payload, headers={'Content-Type': 'application/json'})
+                  with urllib.request.urlopen(req, timeout=20) as response:
+                      result = json.load(response)
+                  if not result.get('ok'): raise RuntimeError('Telegram rejected message')
+                  sent.add(key)
+                  history_path.parent.mkdir(parents=True, exist_ok=True)
+                  history_path.write_text(json.dumps({'sent': sorted(sent)}, indent=2) + '\n')
+                  notifications += 1
+                  print('SENT:', link)
+                  time.sleep(1)
+              except Exception as e:
+                  send_errors += 1
+                  print('NOTIFICATION ERROR:', type(e).__name__)
+
           seen_jobs=set(); outcomes={}; reports=[]
           MAX_PAGES=5
           MAX_DETAILS=30
@@ -440,7 +496,7 @@ jobs:
                           _,detail,dp=get_page(link)
                           objects=list(job_objects(detail)); txt=' '.join(dp.text)
                           if objects:
-                              obj=objects[0]; txt=str(obj.get('description') or txt)
+                              obj=objects[0]; desc=Parser(); desc.feed(str(obj.get('description') or '')); txt=' '.join(desc.text) or txt
                           state,evidence=experience(txt)
                       except Exception as e:
                           state,evidence='UNKNOWN',type(e).__name__
@@ -448,6 +504,8 @@ jobs:
                       outcomes[key]=state
                       print('PRODUCT MATCH:',company,'|',role,'|',title,'|',link)
                       print('EXPERIENCE:',state,'|',evidence,'|',link)
+                      if source_type == 'career':
+                          notify(company, role, title, link, state, evidence)
               if queue: print('PAGE LIMIT: coverage partial')
               print('SOURCE RESULT:',company,source_type,'pages',len(pages),'cards',len(cards),'new matches',matches,'errors',errors)
               reports.append((company,source_type,len(cards),matches,errors))
@@ -458,6 +516,7 @@ jobs:
           assert classify('Senior Product Manager') is None
           assert experience('Требуется опыт от трех лет')[0]=='REVIEW_3_PLUS'
           assert experience('Продуктовый опыт от 2 лет')[0]=='POSSIBLE_MATCH'
+          assert canonical('https://example.com/job/123?utm_source=x') == 'https://example.com/job/123'
           print('SELF TESTS PASSED')
           for company,config in COMPANIES.items():
               for source_type in SOURCE_TYPES:
@@ -469,5 +528,19 @@ jobs:
           print('UNIQUE PRODUCT MATCHES:',len(outcomes))
           for status in ('POSSIBLE_MATCH','UNKNOWN','REVIEW_3_PLUS'):
               print(status, sum(v==status for v in outcomes.values()))
+          print('NOTIFICATIONS SENT:', notifications)
+          print('NOTIFICATION ERRORS:', send_errors)
           print('DIAGNOSTICS COMPLETED')
+          if send_errors: raise SystemExit(1)
           PY
+      - name: Save public vacancy history
+        if: always() && inputs.send_notifications
+        run: |
+          if [ ! -f data/career_history.json ]; then exit 0; fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data/career_history.json
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'Update public career vacancy history'
+          git pull --rebase origin main
+          git push origin HEAD:main
