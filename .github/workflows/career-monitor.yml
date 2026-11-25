@@ -525,7 +525,7 @@ jobs:
                   print('HELD FOR EXPERIENCE REVIEW:',state, '' if private else link)
                   return True
               key=hashlib.sha256(canonical(link).encode()).hexdigest() if not private else hashlib.sha256(('submitted:'+company+':'+link+':'+title).encode()).hexdigest()
-          keys=identity_keys(company,link)
+              keys=identity_keys(company,link)
               avito_path=Path('data/avito_history.json')
               avito_sent=set(json.loads(avito_path.read_text()).get('sent',[])) if avito_path.exists() else set()
               if key in sent or keys.intersection(sent) or any(k.startswith('avito:') and k[6:] in avito_sent for k in keys):
