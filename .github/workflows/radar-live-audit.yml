@@ -1,0 +1,41 @@
+name: Career Radar Live Audit
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/radar-live-audit.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: career-radar-live-audit
+  cancel-in-progress: false
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Public source dry run (no notifications)
+        env:
+          SEND_NOTIFICATIONS: 'false'
+          LINKEDIN_ONLY: 'false'
+          LINKEDIN_RECORDS: '[]'
+          AUTHORIZED_VACANCY_CHANNELS: ''
+          PYTHONUNBUFFERED: '1'
+        run: |
+          python3 -u - <<'PY'
+          import textwrap
+          from pathlib import Path
+          import os
+          os.environ.pop('TELEGRAM_BOT_TOKEN',None)
+          os.environ.pop('TELEGRAM_CHAT_ID',None)
+          path=Path('.github/workflows/career-monitor.yml')
+          code=path.read_text().split("python3 -u - <<'PY'\n",1)[1].split('\n          PY',1)[0]
+          exec(compile(textwrap.dedent(code),str(path),'exec'),{'__name__':'__main__'})
+          PY
+      - name: Confirm histories unchanged
+        if: always()
+        run: git diff --exit-code -- data/
