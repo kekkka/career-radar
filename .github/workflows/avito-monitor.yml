@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: avito-monitor
@@ -17,12 +17,16 @@ jobs:
     timeout-minutes: 30
 
     steps:
+      - name: Download project
+        uses: actions/checkout@v4
+
       - name: Find and send Avito vacancies
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          PYTHONUNBUFFERED: "1"
         run: |
-          python3 - <<'PY'
+          python3 -u - <<'PY'
           import os
           import re
           import json
@@ -32,11 +36,32 @@ jobs:
           import urllib.error
           import urllib.robotparser
 
+          from pathlib import Path
           from html.parser import HTMLParser
           from urllib.parse import urljoin, urlparse
 
           BASE = "https://career.avito.com"
           AGENT = "CareerRadar"
+          HISTORY = Path("data/avito_history.json")
+          RECHECK = 86400
+
+          history = json.loads(
+              HISTORY.read_text(encoding="utf-8")
+          )
+
+          checked = history.setdefault("checked", {})
+          sent = set(history.setdefault("sent", []))
+
+          def save():
+              history["sent"] = sorted(sent)
+              HISTORY.write_text(
+                  json.dumps(
+                      history,
+                      ensure_ascii=False,
+                      indent=2
+                  ),
+                  encoding="utf-8"
+              )
 
           robots = urllib.robotparser.RobotFileParser()
           robots.set_url(BASE + "/robots.txt")
@@ -99,73 +124,12 @@ jobs:
               text = text.lower().replace("ё", "е")
               return re.sub(r"[\W_]+", " ", text).strip()
 
-          pm_patterns = [
-              r"\bproduct\s+(?:\w+\s+){0,2}manager\b",
-              r"\bproduct\s+owner\b",
-              r"\bproduct\s+intern\b",
-              r"\bproduct\s+assistant\b",
-              r"\bproduct\s+lead\b",
-              r"\bпродакт\w*\b",
-              r"\bпродукт\w*\s+менеджер\w*\b",
-              r"\bменеджер\w*\s+продукт\w*\b",
-              r"\bменеджер\w*\s+по\s+продукт\w*\b",
-              r"\bменеджер\w*\s+по\s+развитию\s+продукт",
-              r"\bменеджер\w*\s+продуктов\w+\s+направлен",
-              r"\bвладелец\s+продукт",
-              r"\bапм\b",
-              r"\bapm\b",
-              r"\bpm\b",
-              r"\btpm\b",
-              r"\bpo\b"
-          ]
-
-          analyst_patterns = [
-              r"\bproduct\s+(?:data\s+)?analyst\b",
-              r"\bproduct\s+analytics\b",
-              r"\bgrowth\s+analyst\b",
-              r"\bdata\s+analyst\b",
-              r"\bexperimentation\s+analyst\b",
-              r"\bпродуктов\w*\s+аналитик\w*\b",
-              r"\bаналитик\w*\s+продукт\w*\b",
-              r"\bаналитик\w*\s+данных\b",
-              r"\bаналитик\w*\s+роста\b",
-              r"\bаналитик\w*\s+монетизац",
-              r"\bаналитик\w*\s+рекомендац",
-              r"\bаналитик\w*\s+поиска\b",
-              r"\bаналитик\w*\s+сервис",
-              r"\banalyst\b",
-              r"\bаналитик\w*\b"
-          ]
-
-          senior_pattern = (
-              r"^(?:senior|lead|principal|staff|"
-              r"head|ведущий|старший|"
-              r"руководитель|директор)\b"
-              r"|\b(?:senior|principal|lead)\s+"
-              r"(?:product|data|analyst|pm)\b"
-              r"|\b(?:product manager|product analyst)"
-              r"\s+(?:senior|lead)\b"
-          )
-
-          excluded_pattern = (
-              r"\b(?:системн\w*|бизнес|финансов\w*|"
-              r"маркетингов\w*)\s+аналитик\w*\b"
-              r"|\b(?:system|business|financial|"
-              r"marketing|bi)\s+analyst\b"
-              r"|\bproduct\s+marketing\s+manager\b"
-          )
-
-          
           def classify(title, category):
               text = normalize(title)
 
-              if re.search(senior_pattern, text):
-                  return None
-
-              if re.search(excluded_pattern, text):
-                  return None
-
-              excluded_roles = [
+              excluded = [
+                  r"\b(senior|lead|principal|staff|head|cpo)\b",
+                  r"\b(ведущий|старший|руководитель|директор)\b",
                   r"\bdata analyst\b",
                   r"\bаналитик\w*\s+данных\b",
                   r"\bразработчик\w*\b",
@@ -181,47 +145,44 @@ jobs:
                   r"\bбизнес\s+аналитик",
                   r"\bмаркетингов\w*\s+аналитик",
                   r"\bфинансов\w*\s+аналитик",
+                  r"\b(system|business|marketing|financial)\s+analyst\b",
                   r"\bproduct marketing\b",
                   r"\bproduct designer\b",
                   r"\bдизайнер\w*\b"
               ]
 
-              for pattern in excluded_roles:
-                  if re.search(pattern, text):
-                      return None
+              if any(re.search(p, text) for p in excluded):
+                  return None
 
-              strict_analyst_patterns = [
+              analysts = [
                   r"\bproduct analyst\b",
                   r"\bproduct analytics\b",
-                  r"\bпродуктов\w*\s+аналитик\w*\b",
-                  r"\bаналитик\w*\s+продукт\w*\b",
-                  r"\bпродакт\s+аналитик\w*\b",
-                  r"\bаналитик\w*\s+продуктов\w*\s+команд"
+                  r"\bпродуктов\w*\s+аналитик",
+                  r"\bаналитик\w*\s+продукт",
+                  r"\bпродакт\s+аналитик",
+                  r"\bproduct analyst intern\b",
+                  r"\bстажер\w*\s+продуктов\w*\s+аналитик"
               ]
 
-              for pattern in strict_analyst_patterns:
-                  if re.search(pattern, text):
-                      return "Product Analytics"
-
-              strict_pm_patterns = [
+              managers = [
                   r"\bproduct manager\b",
                   r"\bproduct owner\b",
                   r"\bproduct intern\b",
                   r"\bproduct assistant\b",
                   r"\bпродакт\b",
-                  r"\bпродакт\s+менеджер",
                   r"\bпродукт\w*\s+менеджер",
                   r"\bменеджер\w*\s+продукт",
                   r"\bменеджер\w*\s+по\s+продукт",
                   r"\bменеджер\w*\s+по\s+развитию\s+продукт",
-                  r"\bменеджер\w*\s+продуктов\w*\s+направлен",
                   r"\bвладелец\s+продукт",
                   r"\bapm\b"
               ]
 
-              for pattern in strict_pm_patterns:
-                  if re.search(pattern, text):
-                      return "Product Management"
+              if any(re.search(p, text) for p in analysts):
+                  return "Product Analytics"
+
+              if any(re.search(p, text) for p in managers):
+                  return "Product Management"
 
               if category == "upravlenie-produktom":
                   if re.search(r"\b(pm|po|tpm)\b", text):
@@ -231,10 +192,9 @@ jobs:
 
           def send_message(text):
               token = os.environ["TELEGRAM_BOT_TOKEN"]
-              chat_id = os.environ["TELEGRAM_CHAT_ID"]
 
               payload = json.dumps({
-                  "chat_id": chat_id,
+                  "chat_id": os.environ["TELEGRAM_CHAT_ID"],
                   "text": text,
                   "disable_web_page_preview": True
               }).encode("utf-8")
@@ -254,9 +214,7 @@ jobs:
                       result = json.load(response)
 
                   if not result.get("ok"):
-                      raise RuntimeError(
-                          "Telegram rejected message"
-                      )
+                      raise RuntimeError("Telegram rejected message")
 
               except urllib.error.HTTPError as error:
                   raise RuntimeError(
@@ -274,8 +232,7 @@ jobs:
               result = set()
 
               for href in parser.links:
-                  url = urljoin(source, href)
-                  parsed = urlparse(url)
+                  parsed = urlparse(urljoin(source, href))
 
                   if parsed.hostname == "career.avito.com":
                       result.add(
@@ -308,6 +265,8 @@ jobs:
           }
 
           for category in sorted(categories):
+              print("Checking category:", category)
+
               found = collect_links(
                   fetch(category), category
               )
@@ -319,87 +278,115 @@ jobs:
                   )
               })
 
-          print("Vacancies discovered:", len(vacancies))
-
           if not vacancies:
               raise SystemExit("No vacancies found")
 
-          matched = []
+          print("TOTAL VACANCIES:", len(vacancies))
+
+          processed = 0
+          skipped = 0
+          delivered = 0
           failures = 0
 
-          for url in sorted(vacancies):
+          for index, url in enumerate(sorted(vacancies), 1):
+              job_id = url.rstrip("/").split("/")[-1]
+
+              print(f"Progress: {index}/{len(vacancies)}")
+
+              cached = checked.get(job_id, {})
+              age = time.time() - cached.get("timestamp", 0)
+
               try:
-                  page = fetch(url)
-                  title = page.title.strip()
+                  if cached and age < RECHECK:
+                      job = cached
+                      skipped += 1
+                  else:
+                      page = fetch(url)
+                      title = page.title.strip()
 
-                  if not title:
-                      failures += 1
+                      if not title:
+                          raise RuntimeError("Missing title")
+
+                      category = urlparse(url).path.split("/")[2]
+                      role = classify(title, category)
+
+                      text = normalize(" ".join(page.text))
+
+                      internal = bool(re.search(
+                          r"войдите как сотрудник|"
+                          r"только для сотрудников|"
+                          r"внутренняя вакансия",
+                          text
+                      ))
+
+                      job = {
+                          "title": title,
+                          "role": role,
+                          "internal": internal,
+                          "timestamp": int(time.time())
+                      }
+
+                      checked[job_id] = job
+                      processed += 1
+                      save()
+
+                  if not job.get("role"):
                       continue
 
-                  category = urlparse(url).path.split("/")[2]
-                  role = classify(title, category)
-
-                  if not role:
+                  if job_id in sent:
+                      print("Already sent:", job["title"])
                       continue
 
-                  text = normalize(" ".join(page.text))
+                  access = (
+                      "🔒 Возможно внутренняя вакансия. "
+                      "Уточни возможность рекомендации."
+                      if job["internal"]
+                      else "Способ отклика: уточнить."
+                  )
 
-                  internal = bool(re.search(
-                      r"войдите как сотрудник|"
-                      r"только для сотрудников|"
-                      r"внутренняя вакансия",
-                      text
-                  ))
+                  message = (
+                      "Солнышко, я нашел тебе вакансию! 💗\n\n"
+                      f"💼 {job['title']}\n\n"
+                      "🏢 Компания: Авито\n"
+                      f"📊 Направление: {job['role']}\n"
+                      "⚠️ Требуемый опыт: уточнить\n\n"
+                      f"{access}\n\n"
+                      f"🔗 {url}\n\n"
+                      "У тебя все получится! 🐱"
+                  )
 
-                  matched.append({
-                      "title": title,
-                      "role": role,
-                      "url": url,
-                      "internal": internal
-                  })
+                  send_message(message)
 
-                  print("MATCH:", title)
+                  sent.add(job_id)
+                  delivered += 1
+                  save()
+
+                  print("SENT:", job["title"])
 
               except Exception as error:
                   failures += 1
-                  print("Read failed:", url, type(error).__name__)
+                  print("ERROR:", url, type(error).__name__)
 
-          print("Potential matches:", len(matched))
-          print("Read failures:", failures)
+          save()
 
-          send_message(
-              "Привет, солнышко! 💗\n\n"
-              "Я проверил карьерный сайт Авито.\n\n"
-              f"Просмотрено ссылок: {len(vacancies)}\n"
-              f"Потенциально подходящих: {len(matched)}\n"
-              f"Ошибок чтения: {failures}\n\n"
-              "Пока требования к стажу нужно "
-              "уточнять самостоятельно. 👀"
-          )
-
-          for job in matched:
-              access = (
-                  "🔒 Возможно внутренняя вакансия. "
-                  "Требуется уточнить способ отклика."
-                  if job["internal"]
-                  else "Способ отклика необходимо уточнить."
-              )
-
-              message = (
-                  "Смотри, что я тебе нашел! 🐱\n\n"
-                  f"💼 {job['title']}\n\n"
-                  "🏢 Компания: Авито\n"
-                  f"📊 Направление: {job['role']}\n"
-                  "⚠️ Требуемый опыт: уточнить\n\n"
-                  f"{access}\n\n"
-                  f"🔗 {job['url']}\n\n"
-                  "У тебя все получится! 💗"
-              )
-
-              send_message(message)
-
+          print("Newly checked:", processed)
+          print("Loaded from history:", skipped)
+          print("New notifications:", delivered)
+          print("Errors:", failures)
           print("MONITOR COMPLETED")
 
           if failures:
-              raise SystemExit("Some vacancies could not be read")
+              raise SystemExit("Some vacancies failed")
           PY
+
+      - name: Save vacancy history
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/avito_history.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Update Avito vacancy history"
+            git pull --rebase origin main
+            git push origin HEAD:main
+          fi
