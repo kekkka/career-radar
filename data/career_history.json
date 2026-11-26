@@ -3,11 +3,11 @@
     "2a9a064a054f156bdab5fe96a54a5f0f0e4165263f12eee89e233048783e04d6",
     "url:2a9a064a054f156bdab5fe96a54a5f0f0e4165263f12eee89e233048783e04d6"
   ],
-  "telegram_offset": 218597069,
+  "telegram_offset": 218597070,
   "diagnostics": {
-    "day": "2026-11-25",
+    "day": "2026-11-26",
     "runs": 1,
-    "sent": 1,
+    "sent": 0,
     "duplicates": 0,
     "retries": 0,
     "latest_health": {
@@ -15,12 +15,6 @@
       "\u042f\u043d\u0434\u0435\u043a\u0441 | career | ac39334bb78d": "CARDS_FOUND",
       "\u042f\u043d\u0434\u0435\u043a\u0441 | career | 8fe1799d2b55": "CARDS_FOUND",
       "\u042f\u043d\u0434\u0435\u043a\u0441 | career | d11c130f38ab": "CARDS_FOUND",
-      "\u0421\u0430\u043c\u043e\u043a\u0430\u0442 | career | 140e42fbe8e6": "ERROR",
-      "\u0421\u0430\u043c\u043e\u043a\u0430\u0442 | career | 08eb1e9f857e": "ERROR",
-      "\u0421\u0430\u043c\u043e\u043a\u0430\u0442 | career | 3791dd79bf10": "ERROR",
-      "\u0421\u0430\u043c\u043e\u043a\u0430\u0442 | career | 74abc48c4ffb": "ERROR",
-      "\u0421\u0430\u043c\u043e\u043a\u0430\u0442 | career | ce4fca2a9bcf": "ERROR",
-      "\u0421\u0430\u043c\u043e\u043a\u0430\u0442 | career | f8d20d6fb340": "NO_CARDS_UNVERIFIED",
       "\u0412\u043a\u0443\u0441\u0412\u0438\u043b\u043b | career | 80b81e78a271": "CARDS_FOUND",
       "Dodo Brands | career | 0d7f741ec106": "ERROR",
       "Dodo Brands | career | 75551ad5ce29": "NO_CARDS_UNVERIFIED",
@@ -28,43 +22,27 @@
       "Dodo Brands | career | 53a8eef8acb0": "NO_CARDS_UNVERIFIED",
       "\u0410\u0432\u0438\u0430\u0441\u0435\u0439\u043b\u0441 | career | dd72c88f61d2": "CARDS_FOUND",
       "\u0426\u0438\u0430\u043d | career | e81987fc685f": "NO_CARDS_UNVERIFIED",
-      "\u0426\u0438\u0430\u043d | career | d7bbce0f762d": "CARDS_FOUND",
-      "\u0415\u0410\u041f\u0422\u0415\u041a\u0410 | career | 05c5333502b7": "NO_CARDS_UNVERIFIED",
-      "\u0415\u0410\u041f\u0422\u0415\u041a\u0410 | career | 66530e65cf0f": "NO_CARDS_UNVERIFIED",
-      "Skyeng | career | 017398c3b082": "NO_CARDS_UNVERIFIED",
-      "Skyeng | career | a043d1fc50a5": "NO_CARDS_UNVERIFIED",
-      "Skyeng | career | 3a0a3ac2f48a": "NO_CARDS_UNVERIFIED",
-      "Skyeng | career | 2b0e84b6e1ee": "NO_CARDS_UNVERIFIED",
-      "Skyeng | referral | 12e35907f886": "NO_CARDS_UNVERIFIED",
-      "\u041a\u0438\u043d\u043e\u043f\u043e\u0438\u0441\u043a | career | 4fa390a6ab6e": "NO_CARDS_UNVERIFIED",
-      "\u041a\u0438\u043d\u043e\u043f\u043e\u0438\u0441\u043a | career | 70959494d468": "PARTIAL",
-      "START | career | 46a708e6bc95": "NO_CARDS_UNVERIFIED",
-      "START | career | 0e934fcf1a32": "NO_CARDS_UNVERIFIED",
-      "START | career | adda1b79ac6b": "NO_CARDS_UNVERIFIED",
-      "Wink | career | 0f18c43dbf95": "NO_CARDS_UNVERIFIED",
-      "Wink | career | ef084b11a41a": "NO_CARDS_UNVERIFIED",
-      "Wink | career | a955c9e0ad84": "NO_CARDS_UNVERIFIED"
+      "\u0426\u0438\u0430\u043d | career | d7bbce0f762d": "CARDS_FOUND"
     },
     "page_cache_hits": 1,
-    "elapsed_seconds": 225,
+    "elapsed_seconds": 140,
     "outcomes": {
-      "POSSIBLE_MATCH": 1,
+      "POSSIBLE_MATCH": 0,
       "UNKNOWN": 8,
       "REVIEW_3_PLUS": 11,
       "CLOSED": 0
     },
     "avito": {
-      "at": "2026-11-25T20:19:31.287802+00:00",
+      "at": "2026-11-26T03:30:57.237181+00:00",
       "cards": 121,
       "sent": 0,
       "held": 1,
       "closed": 0,
       "errors": 0,
       "status": "CARDS_FOUND",
-      "elapsed_seconds": 546,
+      "elapsed_seconds": 83,
       "cache_hits": 0
-    },
-    "linkedin": {}
+    }
   },
   "daily_report_sent": "2026-11-25"
 }
