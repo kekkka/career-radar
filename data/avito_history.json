@@ -1826,14 +1826,14 @@
   },
   "sent": [],
   "diagnostics": {
-    "at": "2026-11-25T20:19:31.287802+00:00",
+    "at": "2026-11-26T03:30:57.237181+00:00",
     "cards": 121,
     "sent": 0,
     "held": 1,
     "closed": 0,
     "errors": 0,
     "status": "CARDS_FOUND",
-    "elapsed_seconds": 546,
+    "elapsed_seconds": 83,
     "cache_hits": 0
   }
 }
