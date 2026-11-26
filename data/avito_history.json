@@ -1822,18 +1822,63 @@
       "internal": true,
       "timestamp": 1795637971,
       "revision": 14
+    },
+    "4110de71-7868-4f2a-a5e9-b89681fcb080": {
+      "title": "Коммуникационный дизайнер",
+      "role": null,
+      "state": "UNKNOWN",
+      "evidence": "No reliable evidence",
+      "ranking": [
+        0,
+        [],
+        [],
+        false
+      ],
+      "internal": true,
+      "timestamp": 1795690116,
+      "revision": 14
+    },
+    "f910435f-1c93-401d-b699-42bdfdcc9a54": {
+      "title": "T&D партнер направлений продукта и дизайна",
+      "role": null,
+      "state": "UNKNOWN",
+      "evidence": "No reliable evidence",
+      "ranking": [
+        0,
+        [],
+        [],
+        false
+      ],
+      "internal": true,
+      "timestamp": 1795690120,
+      "revision": 14
+    },
+    "797e327e-232c-4e24-8dec-6de41dbeed97": {
+      "title": "Руководитель отдела развития клиентов столичного региона",
+      "role": null,
+      "state": "UNKNOWN",
+      "evidence": "No reliable evidence",
+      "ranking": [
+        0,
+        [],
+        [],
+        false
+      ],
+      "internal": true,
+      "timestamp": 1795690124,
+      "revision": 14
     }
   },
   "sent": [],
   "diagnostics": {
-    "at": "2026-11-26T03:30:57.237181+00:00",
-    "cards": 121,
+    "at": "2026-11-26T10:48:44.854581+00:00",
+    "cards": 123,
     "sent": 0,
     "held": 1,
     "closed": 0,
     "errors": 0,
     "status": "CARDS_FOUND",
-    "elapsed_seconds": 83,
+    "elapsed_seconds": 103,
     "cache_hits": 0
   }
 }
