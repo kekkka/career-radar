@@ -1867,18 +1867,33 @@
       "internal": true,
       "timestamp": 1795690124,
       "revision": 14
+    },
+    "83d41e41-74b1-4908-ab72-31dea3160e15": {
+      "title": "Аналитик данных в команду ML Autotasking (Ranking / Exp Platform)",
+      "role": null,
+      "state": "UNKNOWN",
+      "evidence": "No reliable evidence",
+      "ranking": [
+        0,
+        [],
+        [],
+        false
+      ],
+      "internal": true,
+      "timestamp": 1795698230,
+      "revision": 14
     }
   },
   "sent": [],
   "diagnostics": {
-    "at": "2026-11-26T10:48:44.854581+00:00",
-    "cards": 123,
+    "at": "2026-11-26T13:03:50.182439+00:00",
+    "cards": 124,
     "sent": 0,
     "held": 1,
     "closed": 0,
     "errors": 0,
     "status": "CARDS_FOUND",
-    "elapsed_seconds": 103,
+    "elapsed_seconds": 87,
     "cache_hits": 0
   }
 }
