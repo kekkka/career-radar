@@ -3,10 +3,10 @@
     "2a9a064a054f156bdab5fe96a54a5f0f0e4165263f12eee89e233048783e04d6",
     "url:2a9a064a054f156bdab5fe96a54a5f0f0e4165263f12eee89e233048783e04d6"
   ],
-  "telegram_offset": 218597071,
+  "telegram_offset": 218597072,
   "diagnostics": {
-    "day": "2026-11-26",
-    "runs": 3,
+    "day": "2026-11-27",
+    "runs": 1,
     "sent": 0,
     "duplicates": 0,
     "retries": 0,
@@ -25,22 +25,22 @@
       "\u0426\u0438\u0430\u043d | career | d7bbce0f762d": "CARDS_FOUND"
     },
     "page_cache_hits": 1,
-    "elapsed_seconds": 140,
+    "elapsed_seconds": 231,
     "outcomes": {
       "POSSIBLE_MATCH": 0,
       "UNKNOWN": 8,
-      "REVIEW_3_PLUS": 11,
+      "REVIEW_3_PLUS": 12,
       "CLOSED": 0
     },
     "avito": {
-      "at": "2026-11-26T13:03:50.182439+00:00",
-      "cards": 124,
+      "at": "2026-11-26T22:23:53.427077+00:00",
+      "cards": 123,
       "sent": 0,
       "held": 1,
       "closed": 0,
       "errors": 0,
       "status": "CARDS_FOUND",
-      "elapsed_seconds": 87,
+      "elapsed_seconds": 83,
       "cache_hits": 0
     }
   },

@@ -1901,14 +1901,14 @@
   },
   "sent": [],
   "diagnostics": {
-    "at": "2026-11-26T22:21:53.523462+00:00",
+    "at": "2026-11-26T22:23:53.427077+00:00",
     "cards": 123,
     "sent": 0,
     "held": 1,
     "closed": 0,
     "errors": 0,
     "status": "CARDS_FOUND",
-    "elapsed_seconds": 454,
+    "elapsed_seconds": 83,
     "cache_hits": 0
   }
 }
