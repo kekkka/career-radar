@@ -6,7 +6,7 @@
   "telegram_offset": 218597072,
   "diagnostics": {
     "day": "2026-11-27",
-    "runs": 1,
+    "runs": 2,
     "sent": 0,
     "duplicates": 0,
     "retries": 0,
@@ -25,7 +25,7 @@
       "\u0426\u0438\u0430\u043d | career | d7bbce0f762d": "CARDS_FOUND"
     },
     "page_cache_hits": 1,
-    "elapsed_seconds": 231,
+    "elapsed_seconds": 151,
     "outcomes": {
       "POSSIBLE_MATCH": 0,
       "UNKNOWN": 8,
@@ -33,14 +33,14 @@
       "CLOSED": 0
     },
     "avito": {
-      "at": "2026-11-26T22:23:53.427077+00:00",
+      "at": "2026-11-27T04:29:30.224863+00:00",
       "cards": 123,
       "sent": 0,
       "held": 1,
       "closed": 0,
       "errors": 0,
       "status": "CARDS_FOUND",
-      "elapsed_seconds": 83,
+      "elapsed_seconds": 84,
       "cache_hits": 0
     }
   },
