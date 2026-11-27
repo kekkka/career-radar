@@ -5,8 +5,8 @@
   ],
   "telegram_offset": 218597072,
   "diagnostics": {
-    "day": "2026-11-27",
-    "runs": 3,
+    "day": "2026-11-28",
+    "runs": 1,
     "sent": 0,
     "duplicates": 0,
     "retries": 0,
@@ -25,7 +25,7 @@
       "\u0426\u0438\u0430\u043d | career | d7bbce0f762d": "CARDS_FOUND"
     },
     "page_cache_hits": 1,
-    "elapsed_seconds": 145,
+    "elapsed_seconds": 141,
     "outcomes": {
       "POSSIBLE_MATCH": 0,
       "UNKNOWN": 8,
