@@ -1835,7 +1835,7 @@
         false
       ],
       "internal": true,
-      "timestamp": 1795690116,
+      "timestamp": 1795788836,
       "revision": 14
     },
     "f910435f-1c93-401d-b699-42bdfdcc9a54": {
@@ -1850,7 +1850,7 @@
         false
       ],
       "internal": true,
-      "timestamp": 1795690120,
+      "timestamp": 1795788844,
       "revision": 14
     },
     "797e327e-232c-4e24-8dec-6de41dbeed97": {
@@ -1865,7 +1865,7 @@
         false
       ],
       "internal": true,
-      "timestamp": 1795690124,
+      "timestamp": 1795788848,
       "revision": 14
     },
     "83d41e41-74b1-4908-ab72-31dea3160e15": {
@@ -1897,18 +1897,78 @@
       "internal": true,
       "timestamp": 1795731524,
       "revision": 14
+    },
+    "bdaeaaa4-cecd-47e7-b169-7010d0a66053": {
+      "title": "Аналитик данных в команду Антифрода",
+      "role": null,
+      "state": "UNKNOWN",
+      "evidence": "No reliable evidence",
+      "ranking": [
+        0,
+        [],
+        [],
+        false
+      ],
+      "internal": true,
+      "timestamp": 1795788828,
+      "revision": 14
+    },
+    "2b01c42a-0de3-4587-b0c7-cf49e5f7ab5e": {
+      "title": "Data Scientist в команду антифрода",
+      "role": null,
+      "state": "UNKNOWN",
+      "evidence": "No reliable evidence",
+      "ranking": [
+        0,
+        [],
+        [],
+        false
+      ],
+      "internal": true,
+      "timestamp": 1795788832,
+      "revision": 14
+    },
+    "b74bb06d-d8bc-4dbe-878e-a3952b62ac46": {
+      "title": "Старший финансовый аналитик LTM",
+      "role": null,
+      "state": "UNKNOWN",
+      "evidence": "No reliable evidence",
+      "ranking": [
+        0,
+        [],
+        [],
+        false
+      ],
+      "internal": true,
+      "timestamp": 1795788840,
+      "revision": 14
+    },
+    "ea3d3a01-2876-4b6c-9934-5182c28f7ad3": {
+      "title": "Менеджер по работе с ключевыми клиентами",
+      "role": null,
+      "state": "UNKNOWN",
+      "evidence": "No reliable evidence",
+      "ranking": [
+        0,
+        [],
+        [],
+        false
+      ],
+      "internal": true,
+      "timestamp": 1795788851,
+      "revision": 14
     }
   },
   "sent": [],
   "diagnostics": {
-    "at": "2026-11-27T04:29:30.224863+00:00",
-    "cards": 123,
+    "at": "2026-11-27T14:14:11.908486+00:00",
+    "cards": 127,
     "sent": 0,
     "held": 1,
     "closed": 0,
     "errors": 0,
     "status": "CARDS_FOUND",
-    "elapsed_seconds": 84,
+    "elapsed_seconds": 106,
     "cache_hits": 0
   }
 }
