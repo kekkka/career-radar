@@ -1991,14 +1991,14 @@
   },
   "sent": [],
   "diagnostics": {
-    "at": "2026-11-27T22:59:37.591991+00:00",
+    "at": "2026-11-28T04:40:35.198030+00:00",
     "cards": 128,
     "sent": 0,
     "held": 1,
     "closed": 0,
     "errors": 1,
     "status": "PARTIAL",
-    "elapsed_seconds": 427,
+    "elapsed_seconds": 94,
     "cache_hits": 0
   }
 }
